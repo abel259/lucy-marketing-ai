@@ -361,9 +361,16 @@ const Dashboard = ({ user, onLogout }) => {
 // âââ App Root âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 export default function App() {
   const [user, setUser] = useState(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  const handleLogin = (userData) => {
+    setUser(userData);
+    setIsAuthenticated(true);
+  };
+
   return user ? (
-    <Dashboard user={user} onLogout={() => setUser(null)} />
+    <Dashboard user={user} onLogout={() => { setUser(null); setIsAuthenticated(false); sessionStorage.clear(); }} />
   ) : (
-    <LoginScreen onLogin={setUser} />
+    <LoginScreen onLogin={handleLogin} />
   );
 }
