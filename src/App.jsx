@@ -527,6 +527,21 @@ const App = () => {
           </div>
         </nav>
 
+        {/* Chat History */}
+        <div style={{ padding: '16px 20px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+          <p style={{ fontSize: 11, fontWeight: 600, color: '#6c5ce7', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10 }}>Chats</p>
+          {chatMessages.filter(m => m.sender === 'user').slice(-3).map((msg, i) => (
+            <div key={i} style={{ fontSize: 13, color: '#8888a8', padding: '6px 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: 'pointer' }}>
+              {msg.text.slice(0, 30)}{msg.text.length > 30 ? '...' : ''}
+            </div>
+          ))}
+          {chatMessages.filter(m => m.sender === 'user').length === 0 && (
+            <div style={{ fontSize: 13, color: '#555', fontStyle: 'italic' }}>No chats yet</div>
+          )}
+        </div>
+
+        <div style={{ flex: 1 }} />
+
         <div style={styles.sidebarFooter}>
           <div style={styles.userProfile}>
             <img
@@ -571,106 +586,15 @@ const App = () => {
           </div>
         )}
 
-        {chatMessages.length === 0 && !campaign ? (
-          <div style={styles.chatWelcome}>
-            <h2 style={styles.chatWelcomeTitle}>How can I help?</h2>
-            <p style={styles.chatWelcomeSubtitle}>
-              Ask me anything about your marketing strategy
-            </p>
-
-            <div style={styles.quickActions}>
-              <button
-                style={styles.quickActionButton}
-                onClick={() =>
-                  handleQuickAction('What urgent marketing tasks need attention?')
-                }
-              >
-                <span style={styles.quickActionIcon}>⚡</span>
-                <span>What urgent marketing tasks need attention?</span>
-              </button>
-              <button
-                style={styles.quickActionButton}
-                onClick={async () => {
-                  setIsLoadingChat(true);
-                  try {
-                    const res = await fetch('/api/generate-campaign', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ brandData, products: [] })
-                    });
-                    const data = await res.json();
-                    setCampaign(data);
-                  } catch (err) {
-                    console.error('Campaign generation failed:', err);
-                  }
-                  setIsLoadingChat(false);
-                }}
-              >
-                <span style={styles.quickActionIcon}>✉️</span>
-                <span>Create an email campaign</span>
-              </button>
-              <button
-                style={styles.quickActionButton}
-                onClick={() => handleQuickAction('Analyze my competitors')}
-              >
-                <span style={styles.quickActionIcon}>🔍</span>
-                <span>Analyze my competitors</span>
-              </button>
-              <button
-                style={styles.quickActionButton}
-                onClick={() => handleQuickAction('Prep social media content')}
-              >
-                <span style={styles.quickActionIcon}>📱</span>
-                <span>Prep social media content</span>
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div style={styles.chatMessages}>
-            {chatMessages.map((msg) => (
-              <div
-                key={msg.id}
-                style={{
-                  ...styles.chatMessage,
-                  alignSelf: msg.sender === 'user' ? 'flex-end' : 'flex-start',
-                }}
-              >
-                <div
-                  style={{
-                    ...styles.chatBubble,
-                    backgroundColor:
-                      msg.sender === 'user' ? '#6c5ce7' : '#1a1a2e',
-                    borderLeft:
-                      msg.sender === 'ai'
-                        ? '3px solid #00cec9'
-                        : '3px solid #6c5ce7',
-                  }}
-                >
-                  <p>{msg.text}</p>
-                  <span style={styles.chatTime}>
-                    {msg.timestamp.toLocaleTimeString([], {
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}
-                  </span>
-                </div>
-              </div>
-            ))}
-            {isLoadingChat && (
-              <div style={styles.chatMessage}>
-                <div style={{ ...styles.chatBubble, backgroundColor: '#1a1a2e' }}>
-                  <div style={styles.typingIndicator}>
-                    <span></span>
-                    <span></span>
-                    <span></span>
-                  </div>
-                </div>
-              </div>
-            )}
-            <div ref={chatEndRef} />
+        {/* Welcome + Chat Input at Top */}
+        {chatMessages.length === 0 && !campaign && (
+          <div style={{ textAlign: 'center', paddingTop: 60, marginBottom: 24 }}>
+            <h2 style={{ fontSize: 28, fontWeight: 700, color: '#e8e8f0', margin: '0 0 8px' }}>How can I help?</h2>
+            <p style={{ color: '#8888a8', fontSize: 15 }}>Ask me anything about your marketing strategy</p>
           </div>
         )}
 
+        {/* Chat Input */}
         <div style={styles.chatInputContainer}>
           <div style={styles.chatInputWrapper}>
             <input
@@ -695,10 +619,122 @@ const App = () => {
               onClick={handleSendMessage}
               disabled={isLoadingChat}
             >
-              →
+              Send
             </button>
           </div>
         </div>
+
+        {/* Chat Messages */}
+        {chatMessages.length > 0 && (
+          <div style={styles.chatMessages}>
+            {chatMessages.map((msg) => (
+              <div
+                key={msg.id}
+                style={{
+                  ...styles.chatMessage,
+                  alignSelf: msg.sender === 'user' ? 'flex-end' : 'flex-start',
+                }}
+              >
+                <div
+                  style={{
+                    ...styles.chatBubble,
+                    backgroundColor: msg.sender === 'user' ? '#6c5ce7' : '#1a1a2e',
+                    borderLeft: msg.sender === 'ai' ? '3px solid #00cec9' : '3px solid #6c5ce7',
+                  }}
+                >
+                  <p>{msg.text}</p>
+                  <span style={styles.chatTime}>
+                    {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                </div>
+              </div>
+            ))}
+            {isLoadingChat && (
+              <div style={styles.chatMessage}>
+                <div style={{ ...styles.chatBubble, backgroundColor: '#1a1a2e' }}>
+                  <div style={styles.typingIndicator}>
+                    <span></span><span></span><span></span>
+                  </div>
+                </div>
+              </div>
+            )}
+            <div ref={chatEndRef} />
+          </div>
+        )}
+
+        {/* Campaign Display */}
+        {campaign && (
+          <div style={{ background: 'rgba(108,92,231,0.1)', borderRadius: 16, padding: 24, marginTop: 20 }}>
+            <h3 style={{ marginBottom: 8 }}>{campaign.campaignName}</h3>
+            <p style={{ color: '#a0a0b8' }}>{campaign.objective}</p>
+            <p style={{ color: '#a0a0b8', fontSize: 13 }}>Target: {campaign.targetSegment} | Best time: {campaign.timing}</p>
+            <div style={{ marginTop: 16 }}>
+              <h4 style={{ marginBottom: 8 }}>Email Sequence:</h4>
+              {campaign.emailSequence?.map((email, i) => (
+                <div key={i} style={{ background: 'rgba(255,255,255,0.05)', borderRadius: 12, padding: 16, marginTop: 8, borderLeft: '3px solid #6c5ce7' }}>
+                  <div style={{ fontSize: 12, color: '#6c5ce7', fontWeight: 600 }}>Day {email.day}</div>
+                  <div style={{ fontWeight: 600, marginTop: 4 }}>Subject: {email.subject}</div>
+                  <div style={{ color: '#a0a0b8', fontSize: 13 }}>{email.previewText}</div>
+                  <div style={{ marginTop: 8, fontSize: 14 }}>{email.bodyOutline}</div>
+                  <div style={{ marginTop: 8, color: '#6c5ce7', fontWeight: 500 }}>CTA: {email.cta}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{ display: 'flex', gap: 24, marginTop: 16, padding: 12, background: 'rgba(108,92,231,0.15)', borderRadius: 8, fontSize: 14 }}>
+              <span>Open Rate: {campaign.estimatedOpenRate}</span>
+              <span>Click Rate: {campaign.estimatedClickRate}</span>
+              <span>ROI: {campaign.projectedROI}</span>
+            </div>
+          </div>
+        )}
+
+        {/* Quick Actions */}
+        {chatMessages.length === 0 && !campaign && (
+          <div style={{ marginTop: 24 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <button style={{ ...styles.quickActionButton, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                onClick={() => handleQuickAction("What's my next campaign?")}>
+                <span><span style={styles.quickActionIcon}>⚡</span> What's my next campaign?</span>
+                <span style={{ color: '#6c5ce7' }}>→</span>
+              </button>
+              <button style={{ ...styles.quickActionButton, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                onClick={async () => {
+                  setIsLoadingChat(true);
+                  try {
+                    const res = await fetch('/api/generate-campaign', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ brandData, products: [] })
+                    });
+                    const data = await res.json();
+                    setCampaign(data);
+                  } catch (err) { console.error(err); }
+                  setIsLoadingChat(false);
+                }}>
+                <span><span style={styles.quickActionIcon}>✉️</span> Draft an email sequence</span>
+                <span style={{ color: '#6c5ce7' }}>→</span>
+              </button>
+              <button style={{ ...styles.quickActionButton, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                onClick={() => handleQuickAction('Analyze my competitors')}>
+                <span><span style={styles.quickActionIcon}>🎯</span> Analyze my competitors</span>
+                <span style={{ color: '#6c5ce7' }}>→</span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Brand Info Card */}
+        {brandData && (
+          <div style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, padding: 16, marginTop: 20, display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#22c55e', flexShrink: 0 }} />
+            <div style={{ flex: 1 }}>
+              <span style={{ fontWeight: 600, fontSize: 14 }}>{brandData.brandName || 'Your Brand'} connected</span>
+              <span style={{ color: '#8888a8', fontSize: 13, marginLeft: 8 }}>
+                {brandData.products?.length || 0} products · {brandData.industry || 'Unknown'}
+              </span>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
