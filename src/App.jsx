@@ -64,30 +64,60 @@ const App = () => {
     return mockData;
   }, []);
 
-  // Simulate analysis progress
+  // Analysis progress with real API call
   useEffect(() => {
     if (screen === 'analyzing') {
+      let cancelled = false;
+
+      // Start progress animation
       const steps = [
         { label: 'Scanning website...', progress: 25 },
         { label: 'Extracting brand identity...', progress: 50 },
         { label: 'Analyzing content...', progress: 75 },
-        { label: 'Building marketing profile...', progress: 100 },
       ];
-
       let currentStep = 0;
       const interval = setInterval(() => {
         if (currentStep < steps.length) {
           setAnalysisProgress(steps[currentStep].progress);
           currentStep++;
-        } else {
-          clearInterval(interval);
-          const extracted = mockBrandExtraction(website);
-          setBrandData(extracted);
-          setTimeout(() => setScreen('brand-extraction'), 500);
         }
       }, 1000);
 
-      return () => clearInterval(interval);
+      // Call real API
+      fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: website.startsWith('http') ? website : 'https://' + website })
+      })
+        .then(res => res.json())
+        .then(data => {
+          if (cancelled) return;
+          clearInterval(interval);
+          setAnalysisProgress(100);
+          setBrandData({
+            business: data.description || mockBrandExtraction(website).business,
+            description: data.description || mockBrandExtraction(website).description,
+            colors: data.brandColors || mockBrandExtraction(website).colors,
+            logo: mockBrandExtraction(website).logo,
+            font: 'Inter',
+            industry: data.industry || mockBrandExtraction(website).industry,
+            targetAudience: data.targetAudience || mockBrandExtraction(website).targetAudience,
+            brandName: data.brandName,
+            tone: data.tone,
+            campaignSuggestion: data.campaignSuggestion,
+          });
+          setTimeout(() => setScreen('brand-extraction'), 500);
+        })
+        .catch(() => {
+          if (cancelled) return;
+          clearInterval(interval);
+          setAnalysisProgress(100);
+          const fallback = mockBrandExtraction(website);
+          setBrandData(fallback);
+          setTimeout(() => setScreen('brand-extraction'), 500);
+        });
+
+      return () => { cancelled = true; clearInterval(interval); };
     }
   }, [screen, website, mockBrandExtraction]);
 
@@ -134,43 +164,48 @@ const App = () => {
   };
 
   // Chat functionality
-  const handleSendMessage = useCallback(() => {
-    if (chatInput.trim()) {
-      const userMessage = {
-        id: Date.now(),
-        text: chatInput,
-        sender: 'user',
+  const handleSendMessage = useCallback(async () => {
+    if (!chatInput.trim()) return;
+
+    const userMessage = {
+      id: Date.now(),
+      text: chatInput,
+      sender: 'user',
+      timestamp: new Date(),
+    };
+
+    setChatMessages((prev) => [...prev, userMessage]);
+    const messageText = chatInput;
+    setChatInput('');
+    setIsLoadingChat(true);
+
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: messageText,
+          brandContext: brandData
+        })
+      });
+      const data = await res.json();
+
+      setChatMessages((prev) => [...prev, {
+        id: Date.now() + 1,
+        text: data.reply,
+        sender: 'ai',
         timestamp: new Date(),
-      };
-
-      setChatMessages((prev) => [...prev, userMessage]);
-      setChatInput('');
-      setIsLoadingChat(true);
-
-      // Simulate AI response
-      setTimeout(() => {
-        const aiResponses = [
-          "I'll help you create a targeted email campaign for your mining equipment audience. What's your primary goal - lead generation or customer retention?",
-          "Based on HeliumDeploy's brand, I recommend focusing on educational content about mining ROI and equipment efficiency. Want me to draft some email templates?",
-          "Your competitors are using product-focused campaigns. You could differentiate with expert guides and customer success stories. Shall we build that?",
-          "I see strong engagement potential with your technical audience. Let me prepare a content calendar for the next quarter.",
-        ];
-
-        const randomResponse =
-          aiResponses[Math.floor(Math.random() * aiResponses.length)];
-
-        const aiMessage = {
-          id: Date.now() + 1,
-          text: randomResponse,
-          sender: 'ai',
-          timestamp: new Date(),
-        };
-
-        setChatMessages((prev) => [...prev, aiMessage]);
-        setIsLoadingChat(false);
-      }, 1200);
+      }]);
+    } catch (err) {
+      setChatMessages((prev) => [...prev, {
+        id: Date.now() + 1,
+        text: 'Sorry, I encountered an error. Please try again.',
+        sender: 'ai',
+        timestamp: new Date(),
+      }]);
     }
-  }, [chatInput]);
+    setIsLoadingChat(false);
+  }, [chatInput, brandData]);
 
   const handleQuickAction = (action) => {
     setChatInput(action);
