@@ -64,16 +64,13 @@ const App = () => {
     return mockData;
   }, []);
 
-  // Analysis progress with real API call
+  // Analysis progress animation
   useEffect(() => {
     if (screen === 'analyzing') {
-      let cancelled = false;
-
-      // Start progress animation
       const steps = [
-        { label: 'Scanning website...', progress: 25 },
-        { label: 'Extracting brand identity...', progress: 50 },
-        { label: 'Analyzing content...', progress: 75 },
+        { progress: 25 },
+        { progress: 50 },
+        { progress: 75 },
       ];
       let currentStep = 0;
       const interval = setInterval(() => {
@@ -82,44 +79,9 @@ const App = () => {
           currentStep++;
         }
       }, 1000);
-
-      // Call real API
-      fetch('/api/analyze', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: website.startsWith('http') ? website : 'https://' + website })
-      })
-        .then(res => res.json())
-        .then(data => {
-          if (cancelled) return;
-          clearInterval(interval);
-          setAnalysisProgress(100);
-          setBrandData({
-            business: data.description || mockBrandExtraction(website).business,
-            description: data.description || mockBrandExtraction(website).description,
-            colors: data.brandColors || mockBrandExtraction(website).colors,
-            logo: mockBrandExtraction(website).logo,
-            font: 'Inter',
-            industry: data.industry || mockBrandExtraction(website).industry,
-            targetAudience: data.targetAudience || mockBrandExtraction(website).targetAudience,
-            brandName: data.brandName,
-            tone: data.tone,
-            campaignSuggestion: data.campaignSuggestion,
-          });
-          setTimeout(() => setScreen('brand-extraction'), 500);
-        })
-        .catch(() => {
-          if (cancelled) return;
-          clearInterval(interval);
-          setAnalysisProgress(100);
-          const fallback = mockBrandExtraction(website);
-          setBrandData(fallback);
-          setTimeout(() => setScreen('brand-extraction'), 500);
-        });
-
-      return () => { cancelled = true; clearInterval(interval); };
+      return () => clearInterval(interval);
     }
-  }, [screen, website, mockBrandExtraction]);
+  }, [screen]);
 
   // Google OAuth callback
   const handleCredentialResponse = (response) => {
@@ -147,10 +109,42 @@ const App = () => {
   };
 
   // Website analysis
-  const handleAnalyzeWebsite = () => {
-    if (websiteInput.trim()) {
-      setWebsite(websiteInput.trim());
-      setScreen('analyzing');
+  const handleAnalyzeWebsite = async () => {
+    if (!websiteInput.trim()) return;
+    const url = websiteInput.trim();
+    setWebsite(url);
+    setScreen('analyzing');
+
+    try {
+      const res = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: url.startsWith('http') ? url : 'https://' + url })
+      });
+      const data = await res.json();
+      setBrandData({
+        business: data.description,
+        description: data.description,
+        colors: data.brandColors || ['#6c5ce7', '#a29bfe', '#dfe6e9', '#2d3436', '#636e72'],
+        logo: mockBrandExtraction(url).logo,
+        font: 'Inter',
+        industry: data.industry || 'Unknown',
+        targetAudience: data.targetAudience || 'General',
+        brandName: data.brandName,
+        tone: data.tone,
+        campaignSuggestion: data.campaignSuggestion,
+      });
+      setAnalysisProgress(100);
+      setTimeout(() => setScreen('brand-extraction'), 500);
+    } catch (err) {
+      console.error('Analysis failed:', err);
+      setBrandData({
+        ...mockBrandExtraction(url),
+        brandName: url.replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0],
+        campaignSuggestion: { name: 'Welcome Campaign', description: 'Introductory email series', estimatedOpenRate: '25%', projectedROI: '150%' }
+      });
+      setAnalysisProgress(100);
+      setTimeout(() => setScreen('brand-extraction'), 500);
     }
   };
 
