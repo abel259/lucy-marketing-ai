@@ -1,376 +1,1402 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 
-// âââ Google OAuth Configuration âââââââââââââââââââââââââââââââââââââââââââââââ
-const GOOGLE_CLIENT_ID = "48759326038-bti7je30dad8knp7grufpgd99h2spqvi.apps.googleusercontent.com";
+// ============================================================================
+// Lucy Marketing AI - Complete Single-File React App
+// ============================================================================
 
-// âââ Color Palette ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
-const colors = {
-  bg: "#0f0f1a",
-  surface: "#1a1a2e",
-  surfaceLight: "#222240",
-  accent: "#6c5ce7",
-  accentLight: "#a29bfe",
-  success: "#00cec9",
-  warning: "#fdcb6e",
-  danger: "#ff7675",
-  text: "#e8e8f0",
-  textMuted: "#8888a8",
-  border: "#2d2d50",
-  cardBg: "#1e1e36",
-};
+const App = () => {
+  // Navigation state machine
+  const [screen, setScreen] = useState('landing'); // landing -> login -> website-input -> analyzing -> brand-extraction -> marketing-ready -> dashboard
+  const [user, setUser] = useState(null);
+  const [website, setWebsite] = useState('');
+  const [websiteInput, setWebsiteInput] = useState('');
+  const [analysisProgress, setAnalysisProgress] = useState(0);
+  const [brandData, setBrandData] = useState(null);
+  const [chatMessages, setChatMessages] = useState([]);
+  const [chatInput, setChatInput] = useState('');
+  const [isLoadingChat, setIsLoadingChat] = useState(false);
+  const chatEndRef = useRef(null);
 
-// âââ Mock Data ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
-const initialCards = {
-  recommended: [
-    { id: "c1", title: "Launch Email Campaign", description: "New product announcement to 12k subscribers", priority: "high", type: "email", eta: "2 days" },
-    { id: "c2", title: "Review Ad Spend", description: "Monthly Google Ads budget at 78% â optimize bids", priority: "medium", type: "ads", eta: "Today" },
-    { id: "c3", title: "Schedule Social Posts", description: "Q2 product launch â 8 posts ready for review", priority: "medium", type: "social", eta: "3 days" },
-    { id: "c4", title: "Update Landing Page", description: "A/B test variant B outperforming by 23%", priority: "high", type: "web", eta: "1 day" },
-    { id: "c5", title: "Segment Audience List", description: "Create re-engagement segment for dormant users", priority: "low", type: "email", eta: "5 days" },
-  ],
-  in_progress: [
-    { id: "c6", title: "Blog Content Calendar", description: "April editorial calendar â 3 of 8 posts drafted", priority: "medium", type: "content", eta: "Ongoing" },
-    { id: "c7", title: "Influencer Outreach", description: "Contacted 5 of 12 target micro-influencers", priority: "low", type: "social", eta: "1 week" },
-  ],
-  completed: [
-    { id: "c8", title: "Q1 Performance Report", description: "Compiled and shared with stakeholders", priority: "low", type: "analytics", eta: "Done" },
-  ],
-};
-
-const metrics = [
-  { label: "Active Campaigns", value: "12", change: "+3", up: true, icon: "ð£" },
-  { label: "Emails Sent (MTD)", value: "48.2k", change: "+12%", up: true, icon: "âï¸" },
-  { label: "Ad Spend", value: "$14.8k", change: "78%", up: false, icon: "ð°" },
-  { label: "Conversion Rate", value: "3.8%", change: "+0.4%", up: true, icon: "ð" },
-];
-
-// âââ Small Components âââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
-const TypeIcon = ({ type }) => {
-  const icons = { email: "âï¸", ads: "ð¢", social: "ð±", web: "ð", content: "ð", analytics: "ð" };
-  return <span style={{ fontSize: 16 }}>{icons[type] || "ð"}</span>;
-};
-
-const PriorityBadge = ({ priority }) => {
-  const c = { high: colors.danger, medium: colors.warning, low: colors.success };
-  return (
-    <span style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, color: c[priority], background: `${c[priority]}18`, padding: "2px 8px", borderRadius: 4 }}>
-      {priority}
-    </span>
-  );
-};
-
-const GoogleLogo = () => (
-  <svg width="20" height="20" viewBox="0 0 48 48">
-    <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
-    <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
-    <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
-    <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
-  </svg>
-);
-
-// âââ Login Screen âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
-const LoginScreen = ({ onLogin }) => {
-  const [isLoading, setIsLoading] = useState(false);
-  const [googleReady, setGoogleReady] = useState(false);
-  const googleBtnRef = useRef(null);
-
+  // Initialize Google Sign-In
   useEffect(() => {
-    const initGoogle = () => {
-      if (window.google && window.google.accounts) {
-        try {
-          window.google.accounts.id.initialize({
-            client_id: GOOGLE_CLIENT_ID,
-            callback: (response) => {
-              const payload = JSON.parse(atob(response.credential.split(".")[1]));
-              onLogin({ name: payload.name, email: payload.email, picture: payload.picture });
-            },
-          });
-          window.google.accounts.id.renderButton(googleBtnRef.current, {
-            theme: "outline", size: "large", width: 320, text: "signin_with",
-          });
-          setGoogleReady(true);
-        } catch (e) { console.error("Google Sign-In init error:", e); }
-      } else {
-        setTimeout(initGoogle, 500);
+    const script = document.createElement('script');
+    script.src = 'https://accounts.google.com/gsi/client';
+    script.async = true;
+    script.defer = true;
+    document.head.appendChild(script);
+
+    window.onload = () => {
+      if (window.google && screen === 'login') {
+        google.accounts.id.initialize({
+          client_id: '48759326038-bti7je30dad8knp7grufpgd99h2spqvi.apps.googleusercontent.com',
+          callback: handleCredentialResponse,
+        });
+        google.accounts.id.renderButton(
+          document.getElementById('googleSignInButton'),
+          { theme: 'dark', size: 'large' }
+        );
       }
     };
-    initGoogle();
-  }, [onLogin]);
 
-  const handleDemoLogin = () => {
-    setIsLoading(true);
-    setTimeout(() => {
-      onLogin({ name: "Abel Solomon", email: "abel@heliumdeploy.io", picture: null });
-    }, 1200);
-  };
+    return () => {
+      if (document.head.contains(script)) {
+        document.head.removeChild(script);
+      }
+    };
+  }, [screen]);
 
-  return (
-    <div style={{
-      minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center",
-      background: `linear-gradient(135deg, ${colors.bg} 0%, #16163a 50%, ${colors.bg} 100%)`,
-    }}>
-      <div style={{ position: "absolute", inset: 0, overflow: "hidden", pointerEvents: "none" }}>
-        <div style={{ position: "absolute", width: 400, height: 400, borderRadius: "50%", background: `${colors.accent}15`, top: "10%", left: "5%", filter: "blur(80px)" }} />
-        <div style={{ position: "absolute", width: 300, height: 300, borderRadius: "50%", background: `${colors.success}10`, bottom: "10%", right: "10%", filter: "blur(60px)" }} />
-      </div>
+  // Auto-scroll chat to bottom
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chatMessages]);
 
-      <div style={{
-        background: colors.surface, borderRadius: 20, padding: "48px 40px", width: 420,
-        boxShadow: "0 25px 60px rgba(0,0,0,0.5)", border: `1px solid ${colors.border}`,
-        position: "relative", zIndex: 1, textAlign: "center", animation: "fadeIn 0.6s ease",
-      }}>
-        <div style={{ marginBottom: 8 }}>
-          <div style={{
-            width: 64, height: 64, borderRadius: 16, margin: "0 auto 16px",
-            background: `linear-gradient(135deg, ${colors.accent}, ${colors.accentLight})`,
-            display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 28, boxShadow: `0 8px 24px ${colors.accent}40`,
-          }}>ð</div>
-          <h1 style={{ color: colors.text, fontSize: 28, fontWeight: 700, margin: 0 }}>Lucy</h1>
-          <p style={{ color: colors.accentLight, fontSize: 14, fontWeight: 500, margin: "4px 0 0", letterSpacing: 2, textTransform: "uppercase" }}>Marketing AI</p>
-        </div>
-
-        <p style={{ color: colors.textMuted, fontSize: 15, lineHeight: 1.6, margin: "24px 0 32px" }}>
-          Your intelligent marketing co-pilot.<br />Campaign actions, insights, and automation â all in one place.
-        </p>
-
-        <div ref={googleBtnRef} style={{ display: "flex", justifyContent: "center", marginBottom: googleReady ? 16 : 0 }} />
-
-        {!googleReady && (
-          <button onClick={handleDemoLogin} disabled={isLoading} style={{
-            width: "100%", padding: "14px 24px", borderRadius: 12, border: `1px solid ${colors.border}`,
-            background: isLoading ? colors.surfaceLight : "white", cursor: isLoading ? "default" : "pointer",
-            display: "flex", alignItems: "center", justifyContent: "center", gap: 12,
-            fontSize: 15, fontWeight: 500, color: isLoading ? colors.textMuted : "#333", transition: "all 0.2s", marginBottom: 16,
-          }}
-          onMouseEnter={e => { if (!isLoading) { e.target.style.background = "#f5f5f5"; e.target.style.transform = "translateY(-1px)"; }}}
-          onMouseLeave={e => { if (!isLoading) { e.target.style.background = "white"; e.target.style.transform = "none"; }}}
-          >
-            {isLoading
-              ? <div style={{ width: 20, height: 20, border: `3px solid ${colors.border}`, borderTopColor: colors.accent, borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
-              : <GoogleLogo />
-            }
-            {isLoading ? "Signing in..." : "Sign in with Google"}
-          </button>
-        )}
-
-        {googleReady && (
-          <button onClick={handleDemoLogin} style={{ background: "none", border: "none", color: colors.textMuted, fontSize: 13, cursor: "pointer", padding: "8px 16px", borderRadius: 8 }}>
-            or continue with demo account â
-          </button>
-        )}
-
-        <p style={{ color: colors.textMuted, fontSize: 12, marginTop: 24 }}>Secured with Google OAuth 2.0</p>
-      </div>
-    </div>
-  );
-};
-
-// âââ Card Component âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
-const ActionCard = ({ card, columnId, onMoveCard }) => {
-  const [expanded, setExpanded] = useState(false);
-  const next = { recommended: "in_progress", in_progress: "completed", completed: null };
-  const prev = { recommended: null, in_progress: "recommended", completed: "in_progress" };
-  const labels = { recommended: "Start Task", in_progress: "Mark Complete", completed: null };
-
-  return (
-    <div onClick={() => setExpanded(!expanded)} style={{
-      background: colors.cardBg, borderRadius: 12, padding: 16,
-      border: `1px solid ${expanded ? colors.accent + "60" : colors.border}`,
-      cursor: "pointer", transition: "all 0.2s",
-      boxShadow: expanded ? `0 4px 20px ${colors.accent}20` : "none",
-    }}
-    onMouseEnter={e => e.currentTarget.style.borderColor = colors.accent + "40"}
-    onMouseLeave={e => { if (!expanded) e.currentTarget.style.borderColor = colors.border; }}
-    >
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <TypeIcon type={card.type} />
-          <span style={{ color: colors.text, fontSize: 14, fontWeight: 600, lineHeight: 1.3 }}>{card.title}</span>
-        </div>
-        <PriorityBadge priority={card.priority} />
-      </div>
-      <p style={{ color: colors.textMuted, fontSize: 13, margin: "0 0 10px", lineHeight: 1.5 }}>{card.description}</p>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <span style={{ color: colors.textMuted, fontSize: 11 }}>â± {card.eta}</span>
-      </div>
-      {expanded && (
-        <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${colors.border}`, display: "flex", gap: 8 }}>
-          {prev[columnId] && (
-            <button onClick={e => { e.stopPropagation(); onMoveCard(card.id, columnId, prev[columnId]); }} style={{
-              flex: 1, padding: "8px 12px", borderRadius: 8, border: `1px solid ${colors.border}`,
-              background: "transparent", color: colors.textMuted, fontSize: 12, cursor: "pointer",
-            }}>â Move Back</button>
-          )}
-          {next[columnId] && (
-            <button onClick={e => { e.stopPropagation(); onMoveCard(card.id, columnId, next[columnId]); }} style={{
-              flex: 1, padding: "8px 12px", borderRadius: 8, border: "none",
-              background: `linear-gradient(135deg, ${colors.accent}, ${colors.accentLight})`,
-              color: "white", fontSize: 12, fontWeight: 600, cursor: "pointer",
-              boxShadow: `0 4px 12px ${colors.accent}40`,
-            }}>{labels[columnId]} â</button>
-          )}
-        </div>
-      )}
-    </div>
-  );
-};
-
-// âââ Column Component âââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
-const KanbanColumn = ({ title, columnId, cards, count, color, onMoveCard }) => (
-  <div style={{ flex: 1, minWidth: 280 }}>
-    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16, padding: "0 4px" }}>
-      <div style={{ width: 10, height: 10, borderRadius: "50%", background: color }} />
-      <span style={{ color: colors.text, fontSize: 14, fontWeight: 600 }}>{title}</span>
-      <span style={{ background: colors.surfaceLight, color: colors.textMuted, fontSize: 12, padding: "2px 8px", borderRadius: 10, fontWeight: 600 }}>{count}</span>
-    </div>
-    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      {cards.map(card => <ActionCard key={card.id} card={card} columnId={columnId} onMoveCard={onMoveCard} />)}
-      {cards.length === 0 && (
-        <div style={{ padding: 24, borderRadius: 12, border: `2px dashed ${colors.border}`, textAlign: "center", color: colors.textMuted, fontSize: 13 }}>No tasks here yet</div>
-      )}
-    </div>
-  </div>
-);
-
-// âââ Dashboard Screen âââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
-const Dashboard = ({ user, onLogout }) => {
-  const [cards, setCards] = useState(initialCards);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [activeFilter, setActiveFilter] = useState("all");
-
-  const moveCard = useCallback((cardId, fromCol, toCol) => {
-    setCards(prev => {
-      const card = prev[fromCol].find(c => c.id === cardId);
-      if (!card) return prev;
-      return { ...prev, [fromCol]: prev[fromCol].filter(c => c.id !== cardId), [toCol]: [...prev[toCol], card] };
-    });
+  // Mock Claude API call for brand analysis
+  const mockBrandExtraction = useCallback((url) => {
+    const mockData = {
+      business: "HeliumDeploy positions itself as the 'Top Trusted Home Miner Reseller' offering a wide range of mining hardware and bundles with exceptional customer service.",
+      description: "We provide high-quality mining equipment and expert guidance to help customers build and optimize their mining operations.",
+      colors: ['#c8e632', '#1a1a2e', '#2d2d50', '#111111', '#e8e8f0'],
+      logo: 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"%3E%3Cdefs%3E%3ClinearGradient id="grad" x1="0%25" y1="0%25" x2="100%25" y2="100%25"%3E%3Cstop offset="0%25" style="stop-color:%23c8e632;stop-opacity:1" /%3E%3Cstop offset="100%25" style="stop-color:%2300cec9;stop-opacity:1" /%3E%3C/linearGradient%3E%3C/defs%3E%3Ccircle cx="50" cy="50" r="45" fill="url(%23grad)"%3E%3C/circle%3E%3Ctext x="50" y="60" font-size="40" font-weight="bold" text-anchor="middle" fill="%231a1a2e"%3EHD%3C/text%3E%3C/svg%3E',
+      font: 'Inter',
+      industry: 'Hardware & Mining',
+      targetAudience: 'Home miners, crypto enthusiasts, hardware investors',
+    };
+    return mockData;
   }, []);
 
-  const filterCards = (columnCards) => {
-    let filtered = columnCards;
-    if (searchQuery) { const q = searchQuery.toLowerCase(); filtered = filtered.filter(c => c.title.toLowerCase().includes(q) || c.description.toLowerCase().includes(q)); }
-    if (activeFilter !== "all") filtered = filtered.filter(c => c.type === activeFilter);
-    return filtered;
+  // Simulate analysis progress
+  useEffect(() => {
+    if (screen === 'analyzing') {
+      const steps = [
+        { label: 'Scanning website...', progress: 25 },
+        { label: 'Extracting brand identity...', progress: 50 },
+        { label: 'Analyzing content...', progress: 75 },
+        { label: 'Building marketing profile...', progress: 100 },
+      ];
+
+      let currentStep = 0;
+      const interval = setInterval(() => {
+        if (currentStep < steps.length) {
+          setAnalysisProgress(steps[currentStep].progress);
+          currentStep++;
+        } else {
+          clearInterval(interval);
+          const extracted = mockBrandExtraction(website);
+          setBrandData(extracted);
+          setTimeout(() => setScreen('brand-extraction'), 500);
+        }
+      }, 1000);
+
+      return () => clearInterval(interval);
+    }
+  }, [screen, website, mockBrandExtraction]);
+
+  // Google OAuth callback
+  const handleCredentialResponse = (response) => {
+    try {
+      const responsePayload = JSON.parse(atob(response.credential.split('.')[1]));
+      setUser({
+        email: responsePayload.email,
+        name: responsePayload.name,
+        picture: responsePayload.picture,
+      });
+      setScreen('website-input');
+    } catch (error) {
+      console.error('OAuth error:', error);
+    }
   };
 
-  const filters = [
-    { key: "all", label: "All" }, { key: "email", label: "âï¸ Email" }, { key: "ads", label: "ð¢ Ads" },
-    { key: "social", label: "ð± Social" }, { key: "web", label: "ð Web" }, { key: "content", label: "ð Content" },
-  ];
+  // Demo login
+  const handleDemoLogin = () => {
+    setUser({
+      email: 'demo@example.com',
+      name: 'Demo User',
+      picture: 'https://via.placeholder.com/40',
+    });
+    setScreen('website-input');
+  };
 
-  const totalTasks = cards.recommended.length + cards.in_progress.length + cards.completed.length;
-  const completionRate = totalTasks ? Math.round((cards.completed.length / totalTasks) * 100) : 0;
+  // Website analysis
+  const handleAnalyzeWebsite = () => {
+    if (websiteInput.trim()) {
+      setWebsite(websiteInput.trim());
+      setScreen('analyzing');
+    }
+  };
 
-  return (
-    <div style={{ minHeight: "100vh", background: colors.bg }}>
-      {/* Nav */}
-      <nav style={{
-        background: colors.surface, borderBottom: `1px solid ${colors.border}`,
-        padding: "12px 32px", display: "flex", alignItems: "center", justifyContent: "space-between",
-        position: "sticky", top: 0, zIndex: 10,
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={{ width: 36, height: 36, borderRadius: 10, background: `linear-gradient(135deg, ${colors.accent}, ${colors.accentLight})`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>ð</div>
-          <span style={{ color: colors.text, fontSize: 18, fontWeight: 700 }}>Lucy</span>
-          <span style={{ color: colors.accentLight, fontSize: 11, fontWeight: 500, letterSpacing: 1.5, textTransform: "uppercase" }}>Marketing AI</span>
-        </div>
-        <div style={{ position: "relative", flex: "0 1 400px" }}>
-          <input type="text" placeholder="Search campaigns, tasks..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-            style={{ width: "100%", padding: "10px 16px 10px 40px", borderRadius: 10, border: `1px solid ${colors.border}`, background: colors.surfaceLight, color: colors.text, fontSize: 14, outline: "none" }}
-            onFocus={e => e.target.style.borderColor = colors.accent} onBlur={e => e.target.style.borderColor = colors.border} />
-          <span style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: colors.textMuted, fontSize: 14 }}>ð</span>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={{ textAlign: "right" }}>
-            <div style={{ color: colors.text, fontSize: 13, fontWeight: 600 }}>{user.name}</div>
-            <div style={{ color: colors.textMuted, fontSize: 11 }}>{user.email}</div>
-          </div>
-          {user.picture
-            ? <img src={user.picture} alt="" style={{ width: 36, height: 36, borderRadius: "50%" }} />
-            : <div style={{ width: 36, height: 36, borderRadius: "50%", background: `linear-gradient(135deg, ${colors.accent}, ${colors.success})`, display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontSize: 14, fontWeight: 700 }}>{user.name.charAt(0)}</div>
-          }
-          <button onClick={onLogout} style={{ background: "none", border: `1px solid ${colors.border}`, color: colors.textMuted, padding: "6px 12px", borderRadius: 8, fontSize: 12, cursor: "pointer" }}
-            onMouseEnter={e => e.target.style.borderColor = colors.danger} onMouseLeave={e => e.target.style.borderColor = colors.border}>Sign Out</button>
-        </div>
-      </nav>
+  // Brand extraction navigation
+  const handleCreateCampaign = () => {
+    setScreen('marketing-ready');
+  };
 
-      <div style={{ maxWidth: 1400, margin: "0 auto", padding: "24px 32px" }}>
-        {/* Welcome */}
-        <div style={{ marginBottom: 24, animation: "fadeIn 0.5s ease" }}>
-          <h2 style={{ color: colors.text, fontSize: 24, fontWeight: 700, margin: 0 }}>
-            Good {new Date().getHours() < 12 ? "morning" : new Date().getHours() < 17 ? "afternoon" : "evening"}, {user.name.split(" ")[0]} ð
-          </h2>
-          <p style={{ color: colors.textMuted, fontSize: 14, margin: "4px 0 0" }}>
-            Here's your marketing overview for {new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}
+  const handleSkip = () => {
+    setScreen('dashboard');
+  };
+
+  // Chat functionality
+  const handleSendMessage = useCallback(() => {
+    if (chatInput.trim()) {
+      const userMessage = {
+        id: Date.now(),
+        text: chatInput,
+        sender: 'user',
+        timestamp: new Date(),
+      };
+
+      setChatMessages((prev) => [...prev, userMessage]);
+      setChatInput('');
+      setIsLoadingChat(true);
+
+      // Simulate AI response
+      setTimeout(() => {
+        const aiResponses = [
+          "I'll help you create a targeted email campaign for your mining equipment audience. What's your primary goal - lead generation or customer retention?",
+          "Based on HeliumDeploy's brand, I recommend focusing on educational content about mining ROI and equipment efficiency. Want me to draft some email templates?",
+          "Your competitors are using product-focused campaigns. You could differentiate with expert guides and customer success stories. Shall we build that?",
+          "I see strong engagement potential with your technical audience. Let me prepare a content calendar for the next quarter.",
+        ];
+
+        const randomResponse =
+          aiResponses[Math.floor(Math.random() * aiResponses.length)];
+
+        const aiMessage = {
+          id: Date.now() + 1,
+          text: randomResponse,
+          sender: 'ai',
+          timestamp: new Date(),
+        };
+
+        setChatMessages((prev) => [...prev, aiMessage]);
+        setIsLoadingChat(false);
+      }, 1200);
+    }
+  }, [chatInput]);
+
+  const handleQuickAction = (action) => {
+    setChatInput(action);
+  };
+
+  // ============================================================================
+  // SCREEN RENDERERS
+  // ============================================================================
+
+  const renderLanding = () => (
+    <div style={styles.landingContainer}>
+      {/* Background orbs */}
+      <div style={styles.orb1}></div>
+      <div style={styles.orb2}></div>
+      <div style={styles.orb3}></div>
+
+      {/* Content */}
+      <div style={styles.landingContent}>
+        <div style={styles.logoSection}>
+          <h1 style={styles.logo}>Lucy</h1>
+          <p style={styles.tagline}>Your AI Marketing Assistant</p>
+        </div>
+
+        <div style={styles.heroSection}>
+          <h2 style={styles.heroTitle}>Marketing Excellence, Powered by AI</h2>
+          <p style={styles.heroDescription}>
+            Lucy analyzes your brand, builds campaigns, and delivers AI-powered insights
+            to help you grow faster.
           </p>
-        </div>
 
-        {/* Metrics */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 28 }}>
-          {metrics.map((m, i) => (
-            <div key={i} style={{ background: colors.surface, borderRadius: 14, padding: 20, border: `1px solid ${colors.border}`, transition: "all 0.2s", animation: `fadeIn ${0.3 + i * 0.1}s ease` }}
-              onMouseEnter={e => e.currentTarget.style.borderColor = colors.accent + "50"} onMouseLeave={e => e.currentTarget.style.borderColor = colors.border}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                <div>
-                  <div style={{ color: colors.textMuted, fontSize: 12, fontWeight: 500, marginBottom: 6 }}>{m.label}</div>
-                  <div style={{ color: colors.text, fontSize: 26, fontWeight: 700 }}>{m.value}</div>
-                </div>
-                <span style={{ fontSize: 24 }}>{m.icon}</span>
-              </div>
-              <div style={{ marginTop: 8, fontSize: 12, fontWeight: 600, color: m.up ? colors.success : colors.warning }}>
-                {m.up ? "â" : "â "} {m.change} {m.up ? "vs last month" : "of budget"}
-              </div>
+          <div style={styles.valuePropGrid}>
+            <div style={styles.valueProp}>
+              <div style={styles.valuePropIcon}>📊</div>
+              <h3>Analyze Your Brand</h3>
+              <p>Deep insights into your brand identity and market position</p>
             </div>
-          ))}
-        </div>
-
-        {/* Progress */}
-        <div style={{ background: colors.surface, borderRadius: 12, padding: "16px 20px", border: `1px solid ${colors.border}`, marginBottom: 24, display: "flex", alignItems: "center", gap: 20 }}>
-          <span style={{ color: colors.textMuted, fontSize: 13, fontWeight: 500, whiteSpace: "nowrap" }}>Task Completion</span>
-          <div style={{ flex: 1, height: 8, background: colors.surfaceLight, borderRadius: 4, overflow: "hidden" }}>
-            <div style={{ height: "100%", width: `${completionRate}%`, borderRadius: 4, background: `linear-gradient(90deg, ${colors.accent}, ${colors.success})`, transition: "width 0.5s ease" }} />
+            <div style={styles.valueProp}>
+              <div style={styles.valuePropIcon}>✉️</div>
+              <h3>Build Campaigns</h3>
+              <p>Create targeted campaigns that drive results</p>
+            </div>
+            <div style={styles.valueProp}>
+              <div style={styles.valuePropIcon}>🤖</div>
+              <h3>AI-Powered Insights</h3>
+              <p>Get actionable recommendations from advanced AI</p>
+            </div>
           </div>
-          <span style={{ color: colors.text, fontSize: 14, fontWeight: 700 }}>{completionRate}%</span>
-          <span style={{ color: colors.textMuted, fontSize: 12 }}>({cards.completed.length}/{totalTasks} tasks)</span>
-        </div>
 
-        {/* Filters */}
-        <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
-          {filters.map(f => (
-            <button key={f.key} onClick={() => setActiveFilter(f.key)} style={{
-              padding: "8px 16px", borderRadius: 8, border: "none", fontSize: 13, fontWeight: 500,
-              cursor: "pointer", transition: "all 0.2s",
-              background: activeFilter === f.key ? colors.accent : colors.surfaceLight,
-              color: activeFilter === f.key ? "white" : colors.textMuted,
-            }}>{f.label}</button>
-          ))}
-        </div>
-
-        {/* Kanban */}
-        <div style={{ display: "flex", gap: 20, alignItems: "flex-start" }}>
-          <KanbanColumn title="Recommended Actions" columnId="recommended" color={colors.accentLight} cards={filterCards(cards.recommended)} count={cards.recommended.length} onMoveCard={moveCard} />
-          <KanbanColumn title="In Progress" columnId="in_progress" color={colors.warning} cards={filterCards(cards.in_progress)} count={cards.in_progress.length} onMoveCard={moveCard} />
-          <KanbanColumn title="Completed" columnId="completed" color={colors.success} cards={filterCards(cards.completed)} count={cards.completed.length} onMoveCard={moveCard} />
+          <button
+            style={styles.ctaButton}
+            onClick={() => setScreen('login')}
+            onMouseEnter={(e) => {
+              e.target.style.backgroundColor = '#5a4ab3';
+              e.target.style.transform = 'translateY(-2px)';
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.backgroundColor = '#6c5ce7';
+              e.target.style.transform = 'translateY(0)';
+            }}
+          >
+            Get Started Free
+          </button>
         </div>
       </div>
     </div>
   );
-};
 
-// âââ App Root âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
-export default function App() {
-  const [user, setUser] = useState(null);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const renderLogin = () => (
+    <div style={styles.loginContainer}>
+      <div style={styles.loginCard}>
+        <h2 style={styles.loginTitle}>Welcome to Lucy</h2>
+        <p style={styles.loginSubtitle}>Sign in with your Google account to get started</p>
 
-  const handleLogin = (userData) => {
-    setUser(userData);
-    setIsAuthenticated(true);
+        <div id="googleSignInButton" style={styles.googleButtonContainer}></div>
+
+        <div style={styles.divider}>
+          <span>or</span>
+        </div>
+
+        <button
+          style={styles.demoButton}
+          onClick={handleDemoLogin}
+          onMouseEnter={(e) => {
+            e.target.style.backgroundColor = '#2d2d50';
+          }}
+          onMouseLeave={(e) => {
+            e.target.style.backgroundColor = '#1a1a2e';
+          }}
+        >
+          Demo Login
+        </button>
+
+        <p style={styles.loginFooter}>
+          We never share your data. Your privacy is our priority.
+        </p>
+      </div>
+    </div>
+  );
+
+  const renderWebsiteInput = () => (
+    <div style={styles.inputContainer}>
+      <div style={styles.inputCard}>
+        <h2 style={styles.inputTitle}>Let's analyze your brand</h2>
+        <p style={styles.inputSubtitle}>
+          Enter your website URL to get started
+        </p>
+
+        <input
+          type="url"
+          placeholder="https://example.com"
+          value={websiteInput}
+          onChange={(e) => setWebsiteInput(e.target.value)}
+          onKeyPress={(e) => {
+            if (e.key === 'Enter') handleAnalyzeWebsite();
+          }}
+          style={styles.websiteInput}
+        />
+
+        <button
+          style={styles.analyzeButton}
+          onClick={handleAnalyzeWebsite}
+          onMouseEnter={(e) => {
+            e.target.style.backgroundColor = '#5a4ab3';
+            e.target.style.transform = 'translateY(-2px)';
+          }}
+          onMouseLeave={(e) => {
+            e.target.style.backgroundColor = '#6c5ce7';
+            e.target.style.transform = 'translateY(0)';
+          }}
+        >
+          Analyze
+        </button>
+      </div>
+    </div>
+  );
+
+  const renderAnalyzing = () => (
+    <div style={styles.analyzingContainer}>
+      <div style={styles.analyzingCard}>
+        <div style={styles.spinner}></div>
+        <h2 style={styles.analyzingTitle}>Analyzing your website</h2>
+
+        <div style={styles.progressSteps}>
+          <div style={{ ...styles.progressStep, opacity: analysisProgress >= 25 ? 1 : 0.3 }}>
+            <div style={styles.stepIndicator}>✓</div>
+            <p>Scanning website...</p>
+          </div>
+          <div style={{ ...styles.progressStep, opacity: analysisProgress >= 50 ? 1 : 0.3 }}>
+            <div style={styles.stepIndicator}>✓</div>
+            <p>Extracting brand identity...</p>
+          </div>
+          <div style={{ ...styles.progressStep, opacity: analysisProgress >= 75 ? 1 : 0.3 }}>
+            <div style={styles.stepIndicator}>✓</div>
+            <p>Analyzing content...</p>
+          </div>
+          <div style={{ ...styles.progressStep, opacity: analysisProgress >= 100 ? 1 : 0.3 }}>
+            <div style={styles.stepIndicator}>✓</div>
+            <p>Building marketing profile...</p>
+          </div>
+        </div>
+
+        <div style={styles.progressBar}>
+          <div style={{ ...styles.progressFill, width: `${analysisProgress}%` }}></div>
+        </div>
+
+        <p style={styles.progressText}>{analysisProgress}%</p>
+      </div>
+    </div>
+  );
+
+  const renderBrandExtraction = () => (
+    <div style={styles.brandContainer}>
+      <div style={styles.brandContent}>
+        <h2 style={styles.brandTitle}>About your business</h2>
+
+        <div style={styles.brandGrid}>
+          <div style={styles.brandSection}>
+            <h3 style={styles.sectionTitle}>Logo</h3>
+            <img
+              src={brandData?.logo}
+              alt="Brand logo"
+              style={styles.logoImage}
+            />
+          </div>
+
+          <div style={styles.brandSection}>
+            <h3 style={styles.sectionTitle}>Brand Colors</h3>
+            <div style={styles.colorPalette}>
+              {brandData?.colors.map((color, idx) => (
+                <div
+                  key={idx}
+                  style={{
+                    ...styles.colorSwatch,
+                    backgroundColor: color,
+                  }}
+                  title={color}
+                ></div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div style={styles.brandSection}>
+          <h3 style={styles.sectionTitle}>Brand Description</h3>
+          <textarea
+            defaultValue={brandData?.business}
+            style={styles.brandTextarea}
+            readOnly
+          />
+        </div>
+
+        <div style={styles.brandSection}>
+          <h3 style={styles.sectionTitle}>Industry</h3>
+          <p style={styles.brandText}>{brandData?.industry}</p>
+        </div>
+
+        <div style={styles.brandSection}>
+          <h3 style={styles.sectionTitle}>Target Audience</h3>
+          <p style={styles.brandText}>{brandData?.targetAudience}</p>
+        </div>
+
+        <div style={styles.brandActions}>
+          <button
+            style={{ ...styles.brandButton, backgroundColor: '#6c5ce7' }}
+            onClick={handleCreateCampaign}
+            onMouseEnter={(e) => {
+              e.target.style.backgroundColor = '#5a4ab3';
+              e.target.style.transform = 'translateY(-2px)';
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.backgroundColor = '#6c5ce7';
+              e.target.style.transform = 'translateY(0)';
+            }}
+          >
+            Create Campaign
+          </button>
+          <button
+            style={{ ...styles.brandButton, backgroundColor: '#1a1a2e', border: '1px solid #6c5ce7' }}
+            onClick={() => setScreen('website-input')}
+            onMouseEnter={(e) => {
+              e.target.style.backgroundColor = '#2d2d50';
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.backgroundColor = '#1a1a2e';
+            }}
+          >
+            Update Website
+          </button>
+          <button
+            style={{ ...styles.brandButton, backgroundColor: 'transparent', color: '#8b9dc3' }}
+            onClick={handleSkip}
+          >
+            Skip
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderMarketingReady = () => (
+    <div style={styles.readyContainer}>
+      <div style={styles.readyContent}>
+        <div style={styles.celebrationEmoji}>🎉</div>
+        <h2 style={styles.readyTitle}>Your marketing is ready!</h2>
+        <p style={styles.readySubtitle}>
+          We've built a custom campaign strategy tailored to your brand
+        </p>
+
+        <div style={styles.campaignCard}>
+          <div style={styles.campaignIcon}>📧</div>
+          <h3 style={styles.campaignTitle}>Educational Email Series</h3>
+          <p style={styles.campaignDescription}>
+            A 5-part email sequence educating prospects about mining equipment ROI
+            and best practices. Designed to build trust and drive conversions.
+          </p>
+          <div style={styles.campaignMeta}>
+            <span>📊 Estimated open rate: 35%</span>
+            <span>💰 Projected ROI: 280%</span>
+          </div>
+        </div>
+
+        <button
+          style={styles.ctaButton}
+          onClick={() => setScreen('dashboard')}
+          onMouseEnter={(e) => {
+            e.target.style.backgroundColor = '#5a4ab3';
+            e.target.style.transform = 'translateY(-2px)';
+          }}
+          onMouseLeave={(e) => {
+            e.target.style.backgroundColor = '#6c5ce7';
+            e.target.style.transform = 'translateY(0)';
+          }}
+        >
+          Go to Dashboard
+        </button>
+      </div>
+    </div>
+  );
+
+  const renderDashboard = () => (
+    <div style={styles.dashboardContainer}>
+      {/* Sidebar */}
+      <div style={styles.sidebar}>
+        <div style={styles.sidebarBrand}>
+          <h2 style={styles.sidebarLogo}>Lucy</h2>
+        </div>
+
+        <nav style={styles.sidebarNav}>
+          <div style={styles.navItem}>
+            <span style={styles.navIcon}>🏠</span>
+            <span>Home</span>
+          </div>
+          <div style={styles.navItem}>
+            <span style={styles.navIcon}>✉️</span>
+            <span>Emails</span>
+          </div>
+          <div style={styles.navItem}>
+            <span style={styles.navIcon}>📊</span>
+            <span>Campaigns</span>
+          </div>
+          <div style={styles.navItem}>
+            <span style={styles.navIcon}>📈</span>
+            <span>Analytics</span>
+          </div>
+        </nav>
+
+        <div style={styles.sidebarFooter}>
+          <div style={styles.userProfile}>
+            <img
+              src={user?.picture || 'https://via.placeholder.com/32'}
+              alt="User"
+              style={styles.userAvatar}
+            />
+            <div style={styles.userInfo}>
+              <p style={styles.userName}>{user?.name || 'User'}</p>
+              <p style={styles.userEmail}>{user?.email}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Chat Area */}
+      <div style={styles.chatContainer}>
+        {chatMessages.length === 0 ? (
+          <div style={styles.chatWelcome}>
+            <h2 style={styles.chatWelcomeTitle}>How can I help?</h2>
+            <p style={styles.chatWelcomeSubtitle}>
+              Ask me anything about your marketing strategy
+            </p>
+
+            <div style={styles.quickActions}>
+              <button
+                style={styles.quickActionButton}
+                onClick={() =>
+                  handleQuickAction('What urgent marketing tasks need attention?')
+                }
+              >
+                <span style={styles.quickActionIcon}>⚡</span>
+                <span>What urgent marketing tasks need attention?</span>
+              </button>
+              <button
+                style={styles.quickActionButton}
+                onClick={() => handleQuickAction('Create an email campaign')}
+              >
+                <span style={styles.quickActionIcon}>✉️</span>
+                <span>Create an email campaign</span>
+              </button>
+              <button
+                style={styles.quickActionButton}
+                onClick={() => handleQuickAction('Analyze my competitors')}
+              >
+                <span style={styles.quickActionIcon}>🔍</span>
+                <span>Analyze my competitors</span>
+              </button>
+              <button
+                style={styles.quickActionButton}
+                onClick={() => handleQuickAction('Prep social media content')}
+              >
+                <span style={styles.quickActionIcon}>📱</span>
+                <span>Prep social media content</span>
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div style={styles.chatMessages}>
+            {chatMessages.map((msg) => (
+              <div
+                key={msg.id}
+                style={{
+                  ...styles.chatMessage,
+                  alignSelf: msg.sender === 'user' ? 'flex-end' : 'flex-start',
+                }}
+              >
+                <div
+                  style={{
+                    ...styles.chatBubble,
+                    backgroundColor:
+                      msg.sender === 'user' ? '#6c5ce7' : '#1a1a2e',
+                    borderLeft:
+                      msg.sender === 'ai'
+                        ? '3px solid #00cec9'
+                        : '3px solid #6c5ce7',
+                  }}
+                >
+                  <p>{msg.text}</p>
+                  <span style={styles.chatTime}>
+                    {msg.timestamp.toLocaleTimeString([], {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </span>
+                </div>
+              </div>
+            ))}
+            {isLoadingChat && (
+              <div style={styles.chatMessage}>
+                <div style={{ ...styles.chatBubble, backgroundColor: '#1a1a2e' }}>
+                  <div style={styles.typingIndicator}>
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                  </div>
+                </div>
+              </div>
+            )}
+            <div ref={chatEndRef} />
+          </div>
+        )}
+
+        <div style={styles.chatInputContainer}>
+          <div style={styles.chatInputWrapper}>
+            <input
+              type="text"
+              placeholder="Ask me anything..."
+              value={chatInput}
+              onChange={(e) => setChatInput(e.target.value)}
+              onKeyPress={(e) => {
+                if (e.key === 'Enter' && !isLoadingChat) {
+                  handleSendMessage();
+                }
+              }}
+              style={styles.chatInput}
+              disabled={isLoadingChat}
+            />
+            <button
+              style={{
+                ...styles.chatSendButton,
+                opacity: isLoadingChat ? 0.5 : 1,
+                cursor: isLoadingChat ? 'not-allowed' : 'pointer',
+              }}
+              onClick={handleSendMessage}
+              disabled={isLoadingChat}
+            >
+              →
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  // ============================================================================
+  // RENDER LOGIC
+  // ============================================================================
+
+  const renderScreen = () => {
+    switch (screen) {
+      case 'landing':
+        return renderLanding();
+      case 'login':
+        return renderLogin();
+      case 'website-input':
+        return renderWebsiteInput();
+      case 'analyzing':
+        return renderAnalyzing();
+      case 'brand-extraction':
+        return renderBrandExtraction();
+      case 'marketing-ready':
+        return renderMarketingReady();
+      case 'dashboard':
+        return renderDashboard();
+      default:
+        return renderLanding();
+    }
   };
 
-  return user ? (
-    <Dashboard user={user} onLogout={() => { setUser(null); setIsAuthenticated(false); sessionStorage.clear(); }} />
-  ) : (
-    <LoginScreen onLogin={handleLogin} />
-  );
-}
+  return <div style={styles.app}>{renderScreen()}</div>;
+};
+
+// ============================================================================
+// STYLES
+// ============================================================================
+
+const styles = {
+  app: {
+    width: '100%',
+    minHeight: '100vh',
+    backgroundColor: '#0f0f1a',
+    color: '#ffffff',
+    fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+    overflow: 'hidden',
+  },
+
+  // ========== LANDING PAGE ==========
+  landingContainer: {
+    width: '100%',
+    minHeight: '100vh',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+    backgroundColor: '#0f0f1a',
+    overflow: 'hidden',
+  },
+
+  orb1: {
+    position: 'absolute',
+    width: '500px',
+    height: '500px',
+    borderRadius: '50%',
+    background: 'radial-gradient(circle, rgba(108, 92, 231, 0.15) 0%, rgba(108, 92, 231, 0) 70%)',
+    top: '-200px',
+    right: '-200px',
+    animation: 'float 6s ease-in-out infinite',
+  },
+
+  orb2: {
+    position: 'absolute',
+    width: '400px',
+    height: '400px',
+    borderRadius: '50%',
+    background: 'radial-gradient(circle, rgba(0, 206, 201, 0.1) 0%, rgba(0, 206, 201, 0) 70%)',
+    bottom: '-100px',
+    left: '-100px',
+    animation: 'float 8s ease-in-out infinite reverse',
+  },
+
+  orb3: {
+    position: 'absolute',
+    width: '350px',
+    height: '350px',
+    borderRadius: '50%',
+    background: 'radial-gradient(circle, rgba(253, 203, 110, 0.08) 0%, rgba(253, 203, 110, 0) 70%)',
+    top: '50%',
+    left: '10%',
+    animation: 'float 7s ease-in-out infinite',
+  },
+
+  landingContent: {
+    position: 'relative',
+    zIndex: 10,
+    textAlign: 'center',
+    maxWidth: '800px',
+    padding: '40px 20px',
+    animation: 'fadeIn 0.8s ease-out',
+  },
+
+  logoSection: {
+    marginBottom: '60px',
+  },
+
+  logo: {
+    fontSize: '72px',
+    fontWeight: '900',
+    margin: '0 0 10px 0',
+    background: 'linear-gradient(135deg, #6c5ce7 0%, #00cec9 100%)',
+    WebkitBackgroundClip: 'text',
+    WebkitTextFillColor: 'transparent',
+    backgroundClip: 'text',
+  },
+
+  tagline: {
+    fontSize: '18px',
+    color: '#8b9dc3',
+    margin: 0,
+  },
+
+  heroSection: {
+    marginBottom: '40px',
+  },
+
+  heroTitle: {
+    fontSize: '48px',
+    fontWeight: '700',
+    margin: '0 0 20px 0',
+    lineHeight: '1.3',
+  },
+
+  heroDescription: {
+    fontSize: '18px',
+    color: '#8b9dc3',
+    margin: '0 0 40px 0',
+    lineHeight: '1.6',
+  },
+
+  valuePropGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+    gap: '24px',
+    marginBottom: '60px',
+  },
+
+  valueProp: {
+    padding: '24px',
+    backgroundColor: 'rgba(26, 26, 46, 0.5)',
+    border: '1px solid rgba(108, 92, 231, 0.2)',
+    borderRadius: '12px',
+    transition: 'all 0.3s ease',
+  },
+
+  valuePropIcon: {
+    fontSize: '32px',
+    marginBottom: '12px',
+    display: 'block',
+  },
+
+  ctaButton: {
+    padding: '16px 48px',
+    fontSize: '16px',
+    fontWeight: '600',
+    backgroundColor: '#6c5ce7',
+    color: '#ffffff',
+    border: 'none',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    transition: 'all 0.3s ease',
+  },
+
+  // ========== LOGIN PAGE ==========
+  loginContainer: {
+    width: '100%',
+    minHeight: '100vh',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#0f0f1a',
+    animation: 'fadeIn 0.5s ease-out',
+  },
+
+  loginCard: {
+    backgroundColor: '#1a1a2e',
+    border: '1px solid rgba(108, 92, 231, 0.2)',
+    borderRadius: '16px',
+    padding: '48px',
+    maxWidth: '420px',
+    width: '90%',
+    boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
+  },
+
+  loginTitle: {
+    fontSize: '32px',
+    fontWeight: '700',
+    margin: '0 0 12px 0',
+  },
+
+  loginSubtitle: {
+    fontSize: '16px',
+    color: '#8b9dc3',
+    margin: '0 0 32px 0',
+  },
+
+  googleButtonContainer: {
+    display: 'flex',
+    justifyContent: 'center',
+    marginBottom: '24px',
+  },
+
+  divider: {
+    display: 'flex',
+    alignItems: 'center',
+    margin: '24px 0',
+    color: '#4a5a7a',
+    fontSize: '14px',
+  },
+
+  demoButton: {
+    width: '100%',
+    padding: '12px',
+    fontSize: '16px',
+    fontWeight: '600',
+    backgroundColor: '#1a1a2e',
+    color: '#ffffff',
+    border: '1px solid #6c5ce7',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    transition: 'all 0.3s ease',
+  },
+
+  loginFooter: {
+    fontSize: '12px',
+    color: '#4a5a7a',
+    margin: '24px 0 0 0',
+    textAlign: 'center',
+  },
+
+  // ========== WEBSITE INPUT PAGE ==========
+  inputContainer: {
+    width: '100%',
+    minHeight: '100vh',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#0f0f1a',
+    animation: 'fadeIn 0.5s ease-out',
+  },
+
+  inputCard: {
+    backgroundColor: '#1a1a2e',
+    border: '1px solid rgba(108, 92, 231, 0.2)',
+    borderRadius: '16px',
+    padding: '48px',
+    maxWidth: '500px',
+    width: '90%',
+  },
+
+  inputTitle: {
+    fontSize: '32px',
+    fontWeight: '700',
+    margin: '0 0 12px 0',
+  },
+
+  inputSubtitle: {
+    fontSize: '16px',
+    color: '#8b9dc3',
+    margin: '0 0 32px 0',
+  },
+
+  websiteInput: {
+    width: '100%',
+    padding: '16px',
+    fontSize: '16px',
+    backgroundColor: '#0f0f1a',
+    border: '1px solid rgba(108, 92, 231, 0.3)',
+    borderRadius: '8px',
+    color: '#ffffff',
+    marginBottom: '20px',
+    boxSizing: 'border-box',
+    transition: 'all 0.3s ease',
+  },
+
+  analyzeButton: {
+    width: '100%',
+    padding: '14px',
+    fontSize: '16px',
+    fontWeight: '600',
+    backgroundColor: '#6c5ce7',
+    color: '#ffffff',
+    border: 'none',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    transition: 'all 0.3s ease',
+  },
+
+  // ========== ANALYZING PAGE ==========
+  analyzingContainer: {
+    width: '100%',
+    minHeight: '100vh',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#0f0f1a',
+    animation: 'fadeIn 0.5s ease-out',
+  },
+
+  analyzingCard: {
+    backgroundColor: '#1a1a2e',
+    border: '1px solid rgba(108, 92, 231, 0.2)',
+    borderRadius: '16px',
+    padding: '48px',
+    maxWidth: '500px',
+    width: '90%',
+    textAlign: 'center',
+  },
+
+  spinner: {
+    width: '48px',
+    height: '48px',
+    border: '3px solid rgba(108, 92, 231, 0.2)',
+    borderTop: '3px solid #6c5ce7',
+    borderRadius: '50%',
+    animation: 'spin 1s linear infinite',
+    margin: '0 auto 24px',
+  },
+
+  analyzingTitle: {
+    fontSize: '28px',
+    fontWeight: '700',
+    margin: '0 0 32px 0',
+  },
+
+  progressSteps: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '16px',
+    marginBottom: '32px',
+  },
+
+  progressStep: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+    transition: 'opacity 0.3s ease',
+  },
+
+  stepIndicator: {
+    width: '28px',
+    height: '28px',
+    borderRadius: '50%',
+    backgroundColor: 'rgba(108, 92, 231, 0.2)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: '16px',
+    flexShrink: 0,
+  },
+
+  progressBar: {
+    width: '100%',
+    height: '6px',
+    backgroundColor: 'rgba(108, 92, 231, 0.1)',
+    borderRadius: '3px',
+    overflow: 'hidden',
+    marginBottom: '16px',
+  },
+
+  progressFill: {
+    height: '100%',
+    backgroundColor: '#6c5ce7',
+    transition: 'width 0.3s ease',
+  },
+
+  progressText: {
+    fontSize: '14px',
+    color: '#8b9dc3',
+    margin: 0,
+  },
+
+  // ========== BRAND EXTRACTION PAGE ==========
+  brandContainer: {
+    width: '100%',
+    minHeight: '100vh',
+    backgroundColor: '#0f0f1a',
+    padding: '40px 20px',
+    animation: 'fadeIn 0.5s ease-out',
+    overflowY: 'auto',
+  },
+
+  brandContent: {
+    maxWidth: '800px',
+    margin: '0 auto',
+  },
+
+  brandTitle: {
+    fontSize: '36px',
+    fontWeight: '700',
+    margin: '0 0 40px 0',
+    textAlign: 'center',
+  },
+
+  brandGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
+    gap: '32px',
+    marginBottom: '40px',
+  },
+
+  brandSection: {
+    marginBottom: '32px',
+  },
+
+  sectionTitle: {
+    fontSize: '18px',
+    fontWeight: '600',
+    margin: '0 0 16px 0',
+    color: '#6c5ce7',
+  },
+
+  logoImage: {
+    width: '120px',
+    height: '120px',
+    borderRadius: '12px',
+    backgroundColor: 'rgba(108, 92, 231, 0.1)',
+    padding: '12px',
+  },
+
+  colorPalette: {
+    display: 'flex',
+    gap: '12px',
+    flexWrap: 'wrap',
+  },
+
+  colorSwatch: {
+    width: '60px',
+    height: '60px',
+    borderRadius: '8px',
+    border: '2px solid rgba(108, 92, 231, 0.3)',
+    cursor: 'pointer',
+    transition: 'all 0.3s ease',
+  },
+
+  brandTextarea: {
+    width: '100%',
+    padding: '16px',
+    fontSize: '14px',
+    backgroundColor: '#0f0f1a',
+    border: '1px solid rgba(108, 92, 231, 0.3)',
+    borderRadius: '8px',
+    color: '#ffffff',
+    fontFamily: 'inherit',
+    minHeight: '120px',
+    boxSizing: 'border-box',
+    resize: 'none',
+  },
+
+  brandText: {
+    fontSize: '16px',
+    color: '#d0d8e8',
+    margin: 0,
+    lineHeight: '1.6',
+  },
+
+  brandActions: {
+    display: 'flex',
+    gap: '16px',
+    justifyContent: 'center',
+    marginTop: '40px',
+    flexWrap: 'wrap',
+  },
+
+  brandButton: {
+    padding: '12px 28px',
+    fontSize: '16px',
+    fontWeight: '600',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    transition: 'all 0.3s ease',
+    border: 'none',
+  },
+
+  // ========== MARKETING READY PAGE ==========
+  readyContainer: {
+    width: '100%',
+    minHeight: '100vh',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#0f0f1a',
+    padding: '40px 20px',
+    animation: 'fadeIn 0.5s ease-out',
+  },
+
+  readyContent: {
+    textAlign: 'center',
+    maxWidth: '600px',
+  },
+
+  celebrationEmoji: {
+    fontSize: '72px',
+    marginBottom: '24px',
+    animation: 'bounce 0.6s ease-in-out',
+  },
+
+  readyTitle: {
+    fontSize: '40px',
+    fontWeight: '700',
+    margin: '0 0 12px 0',
+  },
+
+  readySubtitle: {
+    fontSize: '18px',
+    color: '#8b9dc3',
+    margin: '0 0 40px 0',
+    lineHeight: '1.6',
+  },
+
+  campaignCard: {
+    backgroundColor: '#1a1a2e',
+    border: '1px solid rgba(108, 92, 231, 0.2)',
+    borderRadius: '12px',
+    padding: '32px',
+    marginBottom: '40px',
+    textAlign: 'left',
+  },
+
+  campaignIcon: {
+    fontSize: '40px',
+    marginBottom: '16px',
+  },
+
+  campaignTitle: {
+    fontSize: '22px',
+    fontWeight: '600',
+    margin: '0 0 12px 0',
+  },
+
+  campaignDescription: {
+    fontSize: '16px',
+    color: '#8b9dc3',
+    margin: '0 0 16px 0',
+    lineHeight: '1.6',
+  },
+
+  campaignMeta: {
+    display: 'flex',
+    gap: '24px',
+    fontSize: '14px',
+    color: '#6c5ce7',
+  },
+
+  // ========== DASHBOARD ==========
+  dashboardContainer: {
+    display: 'flex',
+    width: '100%',
+    height: '100vh',
+    backgroundColor: '#0f0f1a',
+    animation: 'fadeIn 0.5s ease-out',
+  },
+
+  sidebar: {
+    width: '280px',
+    backgroundColor: '#1a1a2e',
+    borderRight: '1px solid rgba(108, 92, 231, 0.1)',
+    display: 'flex',
+    flexDirection: 'column',
+    padding: '24px',
+    boxSizing: 'border-box',
+  },
+
+  sidebarBrand: {
+    marginBottom: '40px',
+  },
+
+  sidebarLogo: {
+    fontSize: '28px',
+    fontWeight: '900',
+    margin: 0,
+    background: 'linear-gradient(135deg, #6c5ce7 0%, #00cec9 100%)',
+    WebkitBackgroundClip: 'text',
+    WebkitTextFillColor: 'transparent',
+    backgroundClip: 'text',
+  },
+
+  sidebarNav: {
+    flex: 1,
+  },
+
+  navItem: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+    padding: '12px 16px',
+    marginBottom: '8px',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    transition: 'all 0.3s ease',
+    color: '#8b9dc3',
+    fontSize: '16px',
+  },
+
+  navIcon: {
+    fontSize: '20px',
+  },
+
+  sidebarFooter: {
+    borderTop: '1px solid rgba(108, 92, 231, 0.1)',
+    paddingTop: '16px',
+  },
+
+  userProfile: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+  },
+
+  userAvatar: {
+    width: '40px',
+    height: '40px',
+    borderRadius: '50%',
+    objectFit: 'cover',
+  },
+
+  userInfo: {
+    flex: 1,
+    minWidth: 0,
+  },
+
+  userName: {
+    margin: 0,
+    fontSize: '14px',
+    fontWeight: '600',
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+  },
+
+  userEmail: {
+    margin: 0,
+    fontSize: '12px',
+    color: '#4a5a7a',
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+  },
+
+  chatContainer: {
+    flex: 1,
+    display: 'flex',
+    flexDirection: 'column',
+    backgroundColor: '#0f0f1a',
+  },
+
+  chatWelcome: {
+    flex: 1,
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '40px 20px',
+    textAlign: 'center',
+  },
+
+  chatWelcomeTitle: {
+    fontSize: '32px',
+    fontWeight: '700',
+    margin: '0 0 12px 0',
+  },
+
+  chatWelcomeSubtitle: {
+    fontSize: '16px',
+    color: '#8b9dc3',
+    margin: '0 0 40px 0',
+  },
+
+  quickActions: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+    gap: '16px',
+    maxWidth: '800px',
+  },
+
+  quickActionButton: {
+    padding: '20px',
+    backgroundColor: '#1a1a2e',
+    border: '1px solid rgba(108, 92, 231, 0.2)',
+    borderRadius: '12px',
+    color: '#ffffff',
+    cursor: 'pointer',
+    transition: 'all 0.3s ease',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    gap: '8px',
+  },
+
+  quickActionIcon: {
+    fontSize: '24px',
+  },
+
+  chatMessages: {
+    flex: 1,
+    overflowY: 'auto',
+    padding: '24px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '16px',
+  },
+
+  chatMessage: {
+    display: 'flex',
+    marginBottom: '12px',
+  },
+
+  chatBubble: {
+    maxWidth: '60%',
+    padding: '12px 16px',
+    borderRadius: '12px',
+    wordWrap: 'break-word',
+  },
+
+  chatTime: {
+    fontSize: '12px',
+    color: 'rgba(255, 255, 255, 0.6)',
+    marginTop: '4px',
+    display: 'block',
+  },
+
+  typingIndicator: {
+    display: 'flex',
+    gap: '4px',
+    alignItems: 'center',
+  },
+
+  chatInputContainer: {
+    padding: '20px 24px',
+    borderTop: '1px solid rgba(108, 92, 231, 0.1)',
+    backgroundColor: '#0f0f1a',
+  },
+
+  chatInputWrapper: {
+    display: 'flex',
+    gap: '12px',
+    maxWidth: '800px',
+    margin: '0 auto',
+  },
+
+  chatInput: {
+    flex: 1,
+    padding: '12px 16px',
+    fontSize: '16px',
+    backgroundColor: '#1a1a2e',
+    border: '1px solid rgba(108, 92, 231, 0.3)',
+    borderRadius: '8px',
+    color: '#ffffff',
+    transition: 'all 0.3s ease',
+  },
+
+  chatSendButton: {
+    padding: '12px 20px',
+    fontSize: '18px',
+    backgroundColor: '#6c5ce7',
+    color: '#ffffff',
+    border: 'none',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    transition: 'all 0.3s ease',
+  },
+};
+
+export default App;
