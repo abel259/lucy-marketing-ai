@@ -1,63 +1,51 @@
 export default async function handler(req, res) {
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
 
   const { url } = req.body;
-  if (!url) return res.status(400).json({ error: 'URL required' });
+  if (!url) {
+    return res.status(400).json({ error: 'URL required' });
+  }
+
+  // Step 1: Try to get page text via Jina Reader
+  let pageText = '';
+  try {
+    const jinaRes = await fetch('https://r.jina.ai/' + url, {
+      headers: { 'Accept': 'text/plain' },
+      signal: AbortSignal.timeout(8000)
+    });
+    if (jinaRes.ok) {
+      pageText = await jinaRes.text();
+      pageText = pageText.substring(0, 4000);
+    }
+  } catch (e) {
+    console.log('Jina failed, continuing without page text:', e.message);
+  }
+
+  // Step 2: Send to Claude - it knows most websites already
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) {
+    console.error('ANTHROPIC_API_KEY is not set!');
+    return res.status(500).json({
+      error: 'API key not configured',
+      brandName: 'Unknown',
+      description: 'API key not configured. Please set ANTHROPIC_API_KEY.',
+      industry: 'Unknown',
+      targetAudience: 'General',
+      tone: 'Professional',
+      brandColors: ['#6c5ce7', '#00b894', '#0984e3', '#fd79a8', '#fdcb6e'],
+      products: [],
+      logoUrl: null
+    });
+  }
 
   try {
-    // Step 1: Get rendered page text via Jina Reader
-    let pageText = '';
-    try {
-      const jinaResponse = await fetch(`https://r.jina.ai/${url}`, {
-        headers: { 'Accept': 'text/plain' }
-      });
-      if (jinaResponse.ok) {
-        pageText = await jinaResponse.text();
-        // Trim to first 5000 chars to stay within Claude's sweet spot
-        pageText = pageText.substring(0, 5000);
-      }
-    } catch (e) {
-      console.error('Jina fetch failed:', e);
-    }
-
-    // Step 2: Try to fetch raw HTML for color extraction
-    let rawHtml = '';
-    try {
-      const htmlResponse = await fetch(url, {
-        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; LucyBot/1.0)' }
-      });
-      if (htmlResponse.ok) {
-        rawHtml = await htmlResponse.text();
-      }
-    } catch (e) {
-      console.error('HTML fetch failed:', e);
-    }
-
-    // Step 3: Extract colors from raw HTML
-    const hexColors = new Set();
-    const hexRegex = /#([0-9a-fA-F]{6})\b/g;
-    let match;
-    while ((match = hexRegex.exec(rawHtml)) !== null) {
-      hexColors.add('#' + match[1].toLowerCase());
-    }
-
-    // Filter out generic colors
-    const genericColors = new Set([
-      '#000000', '#ffffff', '#fff', '#333333', '#666666', '#999999',
-      '#cccccc', '#eeeeee', '#f5f5f5', '#e5e5e5', '#d4d4d4',
-      '#111111', '#222222', '#444444', '#555555', '#777777',
-      '#888888', '#aaaaaa', '#bbbbbb', '#dddddd',
-      '#f0f0f0', '#fafafa', '#f8f8f8', '#e0e0e0',
-      '#1a1a1a', '#2d2d2d', '#3d3d3d', '#4a4a4a',
-    ]);
-    const filteredColors = [...hexColors].filter(c => !genericColors.has(c));
-
-    // Step 4: Use Claude to analyze the website
-    const claudeResponse = await fetch('https://api.anthropic.com/v1/messages', {
+    const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': process.env.ANTHROPIC_API_KEY,
+        'x-api-key': apiKey,
         'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify({
@@ -65,84 +53,82 @@ export default async function handler(req, res) {
         max_tokens: 1024,
         messages: [{
           role: 'user',
-          content: `Analyze this website content and return a JSON object. The website URL is: ${url}
+          content: `Visit or analyze the website at ${url} and tell me about this brand.
 
-Website text content:
-${pageText || '(Could not extract text)'}
+Here is some text content from the website (may be partial or empty):
+${pageText || '(no text extracted)'}
 
-Colors found in CSS: ${filteredColors.slice(0, 10).join(', ') || 'none found'}
-
-Return ONLY valid JSON, no markdown, no code fences, no explanation. The JSON must have exactly these fields:
+Return ONLY a raw JSON object with these exact fields, no markdown fences, no explanation:
 {
-  "brandName": "the company/brand name",
-  "description": "2-3 sentence description of what this company does, their products, and value proposition",
-  "industry": "their specific industry (e.g. Cryptocurrency Mining Hardware, Fashion, SaaS, etc.)",
-  "targetAudience": "their specific target audience (e.g. Crypto miners and enthusiasts, Small business owners, etc.)",
-  "tone": "their brand voice tone (e.g. Professional, Casual, Bold, etc.)",
+  "brandName": "company name",
+  "description": "2-3 sentence description of what this company does",
+  "industry": "specific industry like Cryptocurrency Mining Hardware, Fashion Retail, etc",
+  "targetAudience": "specific target audience",
+  "tone": "brand voice tone",
   "brandColors": ["#hex1", "#hex2", "#hex3", "#hex4", "#hex5"],
-  "products": ["product 1 name", "product 2 name", "product 3 name"]
+  "products": ["product1", "product2", "product3"]
 }
 
-For brandColors: Use the CSS colors provided if they look like real brand colors. If not enough good colors were found, infer likely brand colors from the website content and industry. Always return exactly 5 hex colors.
+IMPORTANT for brandColors: You must identify the ACTUAL brand colors used on this website. Look at the content and determine what colors the site actually uses for backgrounds, buttons, accents, and text. Return 5 hex color codes that represent the real brand palette. Do NOT guess generic colors - identify the specific colors this brand uses.
 
-For products: List the main products or services mentioned on the site.
-
-IMPORTANT: Return ONLY the JSON object. No other text.`
+Return ONLY the JSON. Nothing else.`
         }]
       })
     });
 
-    if (!claudeResponse.ok) {
-      const errorText = await claudeResponse.text();
-      console.error('Claude API error:', errorText);
-      throw new Error('Claude API failed');
+    if (!claudeRes.ok) {
+      const errText = await claudeRes.text();
+      console.error('Claude API error status:', claudeRes.status, errText);
+      throw new Error('Claude API returned ' + claudeRes.status);
     }
 
-    const claudeData = await claudeResponse.json();
-    const responseText = claudeData.content[0].text.trim();
+    const claudeData = await claudeRes.json();
+    const rawText = claudeData.content[0].text.trim();
+    console.log('Claude raw response:', rawText.substring(0, 200));
 
-    // Parse Claude's response - strip any accidental markdown fences
-    let parsed;
-    try {
-      const cleanJson = responseText.replace(/^```json?\n?/i, '').replace(/\n?```$/i, '').trim();
-      parsed = JSON.parse(cleanJson);
-    } catch (e) {
-      console.error('Failed to parse Claude response:', responseText);
-      throw new Error('Failed to parse brand analysis');
+    // Parse JSON - handle markdown fences if Claude adds them
+    let cleanJson = rawText;
+    if (cleanJson.startsWith('```')) {
+      cleanJson = cleanJson.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
     }
 
-    // Ensure all fields exist with fallbacks
+    const parsed = JSON.parse(cleanJson);
+
+    // Build result with fallbacks
     const result = {
-      brandName: parsed.brandName || new URL(url).hostname.replace('www.', ''),
-      description: parsed.description || 'Could not extract description',
+      brandName: parsed.brandName || 'Unknown',
+      description: parsed.description || '',
       industry: parsed.industry || 'Unknown',
       targetAudience: parsed.targetAudience || 'General',
       tone: parsed.tone || 'Professional',
-      brandColors: (parsed.brandColors && parsed.brandColors.length >= 3)
+      brandColors: Array.isArray(parsed.brandColors) && parsed.brandColors.length >= 3
         ? parsed.brandColors.slice(0, 5)
-        : filteredColors.slice(0, 5).concat(['#6c5ce7', '#00b894', '#0984e3', '#fd79a8', '#fdcb6e']).slice(0, 5),
-      products: parsed.products || [],
+        : ['#000000', '#ffffff', '#00C896', '#1A1A1A', '#FF4D4D'],
+      products: Array.isArray(parsed.products) ? parsed.products : [],
       logoUrl: null
     };
 
-    // Try to get favicon/logo
+    // Get favicon
     try {
-      result.logoUrl = `https://www.google.com/s2/favicons?domain=${new URL(url).hostname}&sz=128`;
+      const hostname = new URL(url).hostname;
+      result.logoUrl = 'https://www.google.com/s2/favicons?domain=' + hostname + '&sz=128';
     } catch (e) {}
 
+    console.log('Returning brand data for:', result.brandName);
     return res.status(200).json(result);
 
   } catch (error) {
-    console.error('Analyze error:', error);
+    console.error('Analyze endpoint error:', error.message, error.stack);
     return res.status(500).json({
-      error: 'Analysis failed',
-      brandName: new URL(url).hostname.replace('www.', ''),
-      description: 'Could not analyze this website. Please fill in your brand details manually.',
+      error: error.message,
+      brandName: url ? new URL(url).hostname.replace('www.', '') : 'Unknown',
+      description: 'Analysis failed: ' + error.message,
       industry: 'Unknown',
       targetAudience: 'General',
       tone: 'Professional',
-      brandColors: ['#6c5ce7', '#00b894', '#0984e3', '#fd79a8', '#fdcb6e'],
-      products: []
+      brandColors: ['#000000', '#ffffff', '#00C896', '#1A1A1A', '#FF4D4D'],
+      products: [],
+      logoUrl: null
     });
   }
 }
