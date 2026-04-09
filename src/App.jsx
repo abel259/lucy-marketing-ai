@@ -16,6 +16,8 @@ const App = () => {
   const [chatInput, setChatInput] = useState('');
   const [isLoadingChat, setIsLoadingChat] = useState(false);
   const [campaign, setCampaign] = useState(null);
+  const [autoCampaign, setAutoCampaign] = useState(null);
+  const [autoCampaignLoading, setAutoCampaignLoading] = useState(false);
   const chatEndRef = useRef(null);
 
   // Initialize Google Sign-In
@@ -56,7 +58,7 @@ const App = () => {
     const mockData = {
       business: "HeliumDeploy positions itself as the 'Top Trusted Home Miner Reseller' offering a wide range of mining hardware and bundles with exceptional customer service.",
       description: "We provide high-quality mining equipment and expert guidance to help customers build and optimize their mining operations.",
-      colors: ['#c8e632', '#1a1a2e', '#2d2d50', '#111111', '#e8e8f0'],
+      brandColors: ['#c8e632', '#1a1a2e', '#2d2d50', '#111111', '#e8e8f0'],
       logo: 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"%3E%3Cdefs%3E%3ClinearGradient id="grad" x1="0%25" y1="0%25" x2="100%25" y2="100%25"%3E%3Cstop offset="0%25" style="stop-color:%23c8e632;stop-opacity:1" /%3E%3Cstop offset="100%25" style="stop-color:%2300cec9;stop-opacity:1" /%3E%3C/linearGradient%3E%3C/defs%3E%3Ccircle cx="50" cy="50" r="45" fill="url(%23grad)"%3E%3C/circle%3E%3Ctext x="50" y="60" font-size="40" font-weight="bold" text-anchor="middle" fill="%231a1a2e"%3EHD%3C/text%3E%3C/svg%3E',
       font: 'Inter',
       industry: 'Hardware & Mining',
@@ -83,6 +85,34 @@ const App = () => {
       return () => clearInterval(interval);
     }
   }, [screen]);
+
+  // Auto-generate campaign when landing on dashboard
+  useEffect(() => {
+    if (screen === 'dashboard' && brandData && !autoCampaign) {
+      setAutoCampaignLoading(true);
+      fetch('/api/generate-campaign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          brandName: brandData.brandName,
+          industry: brandData.industry,
+          products: brandData.products,
+          targetAudience: brandData.targetAudience,
+          brandColors: brandData.brandColors,
+          tone: brandData.tone
+        })
+      })
+      .then(r => r.json())
+      .then(data => {
+        setAutoCampaign(data);
+        setAutoCampaignLoading(false);
+      })
+      .catch(err => {
+        console.error('Auto campaign failed:', err);
+        setAutoCampaignLoading(false);
+      });
+    }
+  }, [screen, brandData]);
 
   // Google OAuth callback
   const handleCredentialResponse = (response) => {
@@ -126,8 +156,8 @@ const App = () => {
       setBrandData({
         business: data.description,
         description: data.description,
-        colors: data.brandColors || ['#6c5ce7', '#a29bfe', '#dfe6e9', '#2d3436', '#636e72'],
-        logo: mockBrandExtraction(url).logo,
+        brandColors: data.brandColors || ['#6c5ce7', '#a29bfe', '#dfe6e9', '#2d3436', '#636e72'],
+        logo: data.logoUrl || mockBrandExtraction(url).logo,
         font: 'Inter',
         industry: data.industry || 'Unknown',
         targetAudience: data.targetAudience || 'General',
@@ -202,9 +232,40 @@ const App = () => {
     setIsLoadingChat(false);
   }, [chatInput, brandData]);
 
-  const handleQuickAction = (action) => {
-    setChatInput(action);
-  };
+  const handleQuickAction = useCallback(async (action) => {
+    const userMessage = {
+      id: Date.now(),
+      text: action,
+      sender: 'user',
+      timestamp: new Date(),
+    };
+    setChatMessages((prev) => [...prev, userMessage]);
+    setChatInput('');
+    setIsLoadingChat(true);
+
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: action, brandContext: brandData })
+      });
+      const data = await res.json();
+      setChatMessages((prev) => [...prev, {
+        id: Date.now() + 1,
+        text: data.reply,
+        sender: 'ai',
+        timestamp: new Date(),
+      }]);
+    } catch (err) {
+      setChatMessages((prev) => [...prev, {
+        id: Date.now() + 1,
+        text: 'Sorry, I encountered an error. Please try again.',
+        sender: 'ai',
+        timestamp: new Date(),
+      }]);
+    }
+    setIsLoadingChat(false);
+  }, [brandData]);
 
   // ============================================================================
   // SCREEN RENDERERS
@@ -389,15 +450,39 @@ const App = () => {
           <div style={styles.brandSection}>
             <h3 style={styles.sectionTitle}>Brand Colors</h3>
             <div style={styles.colorPalette}>
-              {brandData?.colors.map((color, idx) => (
-                <div
-                  key={idx}
-                  style={{
-                    ...styles.colorSwatch,
-                    backgroundColor: color,
-                  }}
-                  title={color}
-                ></div>
+              {brandData?.brandColors.map((color, index) => (
+                <div key={index} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer' }}>
+                  <label style={{ cursor: 'pointer', position: 'relative' }}>
+                    <input
+                      type="color"
+                      value={color}
+                      onChange={(e) => {
+                        const newColors = [...brandData.brandColors];
+                        newColors[index] = e.target.value;
+                        setBrandData({ ...brandData, brandColors: newColors });
+                      }}
+                      style={{
+                        position: 'absolute',
+                        width: '100%',
+                        height: '100%',
+                        opacity: 0,
+                        cursor: 'pointer',
+                        top: 0,
+                        left: 0
+                      }}
+                    />
+                    <div style={{
+                      width: 48,
+                      height: 48,
+                      borderRadius: '50%',
+                      backgroundColor: color,
+                      border: '3px solid rgba(255,255,255,0.2)',
+                      transition: 'transform 0.2s, border-color 0.2s',
+                    }} />
+                  </label>
+                  <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginTop: 6 }}>{color}</span>
+                  <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', marginTop: 2 }}>click to edit</span>
+                </div>
               ))}
             </div>
           </div>
@@ -500,244 +585,241 @@ const App = () => {
     </div>
   );
 
-  const renderDashboard = () => (
-    <div style={styles.dashboardContainer}>
-      {/* Sidebar */}
-      <div style={styles.sidebar}>
-        <div style={styles.sidebarBrand}>
-          <h2 style={styles.sidebarLogo}>Lucy</h2>
-        </div>
+  const renderDashboard = () => {
+    const accentColor = brandData?.brandColors?.[0] || '#6c5ce7';
+    const showQuickActions = chatMessages.length === 0;
 
-        <nav style={styles.sidebarNav}>
-          <div style={styles.navItem}>
-            <span style={styles.navIcon}>🏠</span>
-            <span>Home</span>
+    return (
+      <div style={styles.dashboardContainer}>
+        {/* Sidebar */}
+        <div style={styles.sidebar}>
+          <div style={styles.sidebarBrand}>
+            <h2 style={styles.sidebarLogo}>Lucy</h2>
           </div>
-          <div style={styles.navItem}>
-            <span style={styles.navIcon}>✉️</span>
-            <span>Emails</span>
-          </div>
-          <div style={styles.navItem}>
-            <span style={styles.navIcon}>📊</span>
-            <span>Campaigns</span>
-          </div>
-          <div style={styles.navItem}>
-            <span style={styles.navIcon}>📈</span>
-            <span>Analytics</span>
-          </div>
-        </nav>
 
-        {/* Chat History */}
-        <div style={{ padding: '16px 20px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-          <p style={{ fontSize: 11, fontWeight: 600, color: '#6c5ce7', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10 }}>Chats</p>
-          {chatMessages.filter(m => m.sender === 'user').slice(-3).map((msg, i) => (
-            <div key={i} style={{ fontSize: 13, color: '#8888a8', padding: '6px 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: 'pointer' }}>
-              {msg.text.slice(0, 30)}{msg.text.length > 30 ? '...' : ''}
-            </div>
-          ))}
-          {chatMessages.filter(m => m.sender === 'user').length === 0 && (
-            <div style={{ fontSize: 13, color: '#555', fontStyle: 'italic' }}>No chats yet</div>
-          )}
-        </div>
-
-        <div style={{ flex: 1 }} />
-
-        <div style={styles.sidebarFooter}>
-          <div style={styles.userProfile}>
-            <img
-              src={user?.picture || 'https://via.placeholder.com/32'}
-              alt="User"
-              style={styles.userAvatar}
-            />
-            <div style={styles.userInfo}>
-              <p style={styles.userName}>{user?.name || 'User'}</p>
-              <p style={styles.userEmail}>{user?.email}</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Main Chat Area */}
-      <div style={styles.chatContainer}>
-        {campaign && (
-          <div style={{ background: 'rgba(108,92,231,0.1)', borderRadius: 16, padding: 24, marginBottom: 20 }}>
-            <h3>{campaign.campaignName}</h3>
-            <p style={{ color: '#a0a0b8' }}>{campaign.objective}</p>
-            <p style={{ color: '#a0a0b8' }}>Target: {campaign.targetSegment} | Best time: {campaign.timing}</p>
-
-            <div style={{ marginTop: 16 }}>
-              <h4>Email Sequence:</h4>
-              {campaign.emailSequence?.map((email, i) => (
-                <div key={i} style={{ background: 'rgba(255,255,255,0.05)', borderRadius: 12, padding: 16, marginTop: 8, borderLeft: '3px solid #6c5ce7' }}>
-                  <div style={{ fontSize: 12, color: '#6c5ce7' }}>Day {email.day}</div>
-                  <div style={{ fontWeight: 600 }}>Subject: {email.subject}</div>
-                  <div style={{ color: '#a0a0b8', fontSize: 13 }}>{email.previewText}</div>
-                  <div style={{ marginTop: 8, fontSize: 14 }}>{email.bodyOutline}</div>
-                  <div style={{ marginTop: 8, color: '#6c5ce7', fontWeight: 500 }}>CTA: {email.cta}</div>
-                </div>
-              ))}
-            </div>
-
-            <div style={{ display: 'flex', gap: 24, marginTop: 16, padding: 12, background: 'rgba(108,92,231,0.15)', borderRadius: 8 }}>
-              <span>Open Rate: {campaign.estimatedOpenRate}</span>
-              <span>Click Rate: {campaign.estimatedClickRate}</span>
-              <span>ROI: {campaign.projectedROI}</span>
-            </div>
-          </div>
-        )}
-
-        {/* Welcome + Chat Input at Top */}
-        {chatMessages.length === 0 && !campaign && (
-          <div style={{ textAlign: 'center', paddingTop: 60, marginBottom: 24 }}>
-            <h2 style={{ fontSize: 28, fontWeight: 700, color: '#e8e8f0', margin: '0 0 8px' }}>How can I help?</h2>
-            <p style={{ color: '#8888a8', fontSize: 15 }}>Ask me anything about your marketing strategy</p>
-          </div>
-        )}
-
-        {/* Chat Input */}
-        <div style={styles.chatInputContainer}>
-          <div style={styles.chatInputWrapper}>
-            <input
-              type="text"
-              placeholder="Ask me anything..."
-              value={chatInput}
-              onChange={(e) => setChatInput(e.target.value)}
-              onKeyPress={(e) => {
-                if (e.key === 'Enter' && !isLoadingChat) {
-                  handleSendMessage();
-                }
-              }}
-              style={styles.chatInput}
-              disabled={isLoadingChat}
-            />
-            <button
-              style={{
-                ...styles.chatSendButton,
-                opacity: isLoadingChat ? 0.5 : 1,
-                cursor: isLoadingChat ? 'not-allowed' : 'pointer',
-              }}
-              onClick={handleSendMessage}
-              disabled={isLoadingChat}
-            >
-              Send
-            </button>
-          </div>
-        </div>
-
-        {/* Chat Messages */}
-        {chatMessages.length > 0 && (
-          <div style={styles.chatMessages}>
-            {chatMessages.map((msg) => (
+          <nav style={styles.sidebarNav}>
+            {[
+              { icon: (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>), label: 'Home', active: true },
+              { icon: (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>), label: 'Emails' },
+              { icon: (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>), label: 'Campaigns' },
+              { icon: (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>), label: 'Analytics' },
+            ].map((item) => (
               <div
-                key={msg.id}
+                key={item.label}
                 style={{
-                  ...styles.chatMessage,
-                  alignSelf: msg.sender === 'user' ? 'flex-end' : 'flex-start',
+                  ...styles.navItem,
+                  backgroundColor: item.active ? 'rgba(108, 92, 231, 0.12)' : 'transparent',
+                  color: item.active ? '#ffffff' : '#8b9dc3',
                 }}
+                onMouseEnter={(e) => { if (!item.active) e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.04)'; }}
+                onMouseLeave={(e) => { if (!item.active) e.currentTarget.style.backgroundColor = 'transparent'; }}
               >
-                <div
-                  style={{
-                    ...styles.chatBubble,
-                    backgroundColor: msg.sender === 'user' ? '#6c5ce7' : '#1a1a2e',
-                    borderLeft: msg.sender === 'ai' ? '3px solid #00cec9' : '3px solid #6c5ce7',
-                  }}
-                >
-                  <p>{msg.text}</p>
-                  <span style={styles.chatTime}>
-                    {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </span>
-                </div>
+                <span style={{ display: 'flex', alignItems: 'center', color: item.active ? '#6c5ce7' : '#8b9dc3' }}>{item.icon}</span>
+                <span>{item.label}</span>
               </div>
             ))}
-            {isLoadingChat && (
-              <div style={styles.chatMessage}>
-                <div style={{ ...styles.chatBubble, backgroundColor: '#1a1a2e' }}>
-                  <div style={styles.typingIndicator}>
-                    <span></span><span></span><span></span>
+          </nav>
+
+          {/* Recent Chats */}
+          <div style={{ padding: '16px 0', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+            <p style={{ fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10, padding: '0 16px' }}>Recent Chats</p>
+            {chatMessages.filter(m => m.sender === 'user').slice(-3).map((msg, i) => (
+              <div key={i} style={{ fontSize: 13, color: '#8888a8', padding: '6px 16px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: 'pointer', borderRadius: 6, transition: 'background 0.2s' }}
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.04)'}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+              >
+                {msg.text.slice(0, 28)}{msg.text.length > 28 ? '...' : ''}
+              </div>
+            ))}
+            {chatMessages.filter(m => m.sender === 'user').length === 0 && (
+              <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.2)', fontStyle: 'italic', padding: '0 16px' }}>No chats yet</div>
+            )}
+          </div>
+
+          <div style={{ flex: 1 }} />
+
+          {/* User Profile */}
+          <div style={styles.sidebarFooter}>
+            <div style={styles.userProfile}>
+              <img src={user?.picture || 'https://via.placeholder.com/32'} alt="User" style={styles.userAvatar} />
+              <div style={styles.userInfo}>
+                <p style={styles.userName}>{user?.name || 'User'}</p>
+                <p style={styles.userEmail}>{user?.email}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Main Content */}
+        <div style={styles.dashboardMain}>
+          <div style={styles.dashboardCenter}>
+
+            {/* Welcome Header — only when no chat */}
+            {showQuickActions && (
+              <div style={{ textAlign: 'center', marginBottom: 32, animation: 'dashFadeIn 0.4s ease-out' }}>
+                <h2 style={{ fontSize: 36, fontWeight: 700, color: '#ffffff', margin: '0 0 8px' }}>How can I help?</h2>
+                <p style={{ fontSize: 16, color: 'rgba(255,255,255,0.5)', margin: 0 }}>Ask me anything about your marketing strategy</p>
+              </div>
+            )}
+
+            {/* Chat Input */}
+            <div style={{ position: 'relative', marginBottom: 24, animation: 'dashFadeIn 0.3s ease-out' }}>
+              <input
+                type="text"
+                placeholder="Ask me anything..."
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter' && !isLoadingChat) handleSendMessage(); }}
+                style={styles.dashInput}
+                disabled={isLoadingChat}
+              />
+              <button
+                onClick={handleSendMessage}
+                disabled={isLoadingChat}
+                style={{
+                  ...styles.dashSendBtn,
+                  opacity: isLoadingChat ? 0.5 : 1,
+                  cursor: isLoadingChat ? 'not-allowed' : 'pointer',
+                }}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+              </button>
+            </div>
+
+            {/* Chat Messages */}
+            {chatMessages.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 24 }}>
+                {chatMessages.map((msg) => (
+                  <div
+                    key={msg.id}
+                    style={{
+                      display: 'flex',
+                      justifyContent: msg.sender === 'user' ? 'flex-end' : 'flex-start',
+                    }}
+                  >
+                    <div style={{
+                      maxWidth: '85%',
+                      padding: '12px 16px',
+                      borderRadius: msg.sender === 'user' ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
+                      backgroundColor: msg.sender === 'user' ? '#6c5ce7' : 'rgba(255,255,255,0.08)',
+                      fontSize: 14,
+                      lineHeight: 1.6,
+                      whiteSpace: 'pre-wrap',
+                      wordWrap: 'break-word',
+                    }}>
+                      {msg.text}
+                    </div>
                   </div>
+                ))}
+                {isLoadingChat && (
+                  <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
+                    <div style={{ padding: '12px 20px', borderRadius: '16px 16px 16px 4px', backgroundColor: 'rgba(255,255,255,0.08)', display: 'flex', gap: 4, alignItems: 'center' }}>
+                      <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: 'rgba(255,255,255,0.4)', animation: 'pulse 1.2s ease-in-out infinite' }} />
+                      <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: 'rgba(255,255,255,0.4)', animation: 'pulse 1.2s ease-in-out 0.2s infinite' }} />
+                      <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: 'rgba(255,255,255,0.4)', animation: 'pulse 1.2s ease-in-out 0.4s infinite' }} />
+                    </div>
+                  </div>
+                )}
+                <div ref={chatEndRef} />
+              </div>
+            )}
+
+            {/* Auto Campaign Card */}
+            {showQuickActions && autoCampaign && (
+              <div
+                style={{
+                  background: `linear-gradient(135deg, rgba(108,92,231,0.12) 0%, rgba(0,206,201,0.08) 100%)`,
+                  border: `1px solid ${accentColor}33`,
+                  borderRadius: 16,
+                  padding: 24,
+                  marginBottom: 16,
+                  animation: 'dashSlideUp 0.5s ease-out',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 10, background: `${accentColor}22`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={accentColor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: accentColor, textTransform: 'uppercase', letterSpacing: 0.5 }}>Suggested Campaign</div>
+                    <div style={{ fontSize: 17, fontWeight: 600, color: '#ffffff' }}>{autoCampaign.campaignName || autoCampaign.name || 'Your Next Campaign'}</div>
+                  </div>
+                </div>
+                <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.6)', margin: '0 0 16px', lineHeight: 1.6 }}>
+                  {autoCampaign.objective || autoCampaign.description || ''}
+                </p>
+                <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+                  {autoCampaign.emailSequence && (
+                    <div style={{ background: 'rgba(255,255,255,0.06)', borderRadius: 8, padding: '8px 14px', fontSize: 13 }}>
+                      <span style={{ color: 'rgba(255,255,255,0.4)' }}>Emails</span>
+                      <span style={{ color: '#fff', fontWeight: 600, marginLeft: 6 }}>{autoCampaign.emailSequence.length}</span>
+                    </div>
+                  )}
+                  {autoCampaign.timing && (
+                    <div style={{ background: 'rgba(255,255,255,0.06)', borderRadius: 8, padding: '8px 14px', fontSize: 13 }}>
+                      <span style={{ color: 'rgba(255,255,255,0.4)' }}>Timing</span>
+                      <span style={{ color: '#fff', fontWeight: 600, marginLeft: 6 }}>{autoCampaign.timing}</span>
+                    </div>
+                  )}
+                  {autoCampaign.estimatedOpenRate && (
+                    <div style={{ background: 'rgba(255,255,255,0.06)', borderRadius: 8, padding: '8px 14px', fontSize: 13 }}>
+                      <span style={{ color: 'rgba(255,255,255,0.4)' }}>Open Rate</span>
+                      <span style={{ color: accentColor, fontWeight: 600, marginLeft: 6 }}>{autoCampaign.estimatedOpenRate}</span>
+                    </div>
+                  )}
+                  {autoCampaign.projectedROI && (
+                    <div style={{ background: 'rgba(255,255,255,0.06)', borderRadius: 8, padding: '8px 14px', fontSize: 13 }}>
+                      <span style={{ color: 'rgba(255,255,255,0.4)' }}>ROI</span>
+                      <span style={{ color: accentColor, fontWeight: 600, marginLeft: 6 }}>{autoCampaign.projectedROI}</span>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
-            <div ref={chatEndRef} />
-          </div>
-        )}
 
-        {/* Campaign Display */}
-        {campaign && (
-          <div style={{ background: 'rgba(108,92,231,0.1)', borderRadius: 16, padding: 24, marginTop: 20 }}>
-            <h3 style={{ marginBottom: 8 }}>{campaign.campaignName}</h3>
-            <p style={{ color: '#a0a0b8' }}>{campaign.objective}</p>
-            <p style={{ color: '#a0a0b8', fontSize: 13 }}>Target: {campaign.targetSegment} | Best time: {campaign.timing}</p>
-            <div style={{ marginTop: 16 }}>
-              <h4 style={{ marginBottom: 8 }}>Email Sequence:</h4>
-              {campaign.emailSequence?.map((email, i) => (
-                <div key={i} style={{ background: 'rgba(255,255,255,0.05)', borderRadius: 12, padding: 16, marginTop: 8, borderLeft: '3px solid #6c5ce7' }}>
-                  <div style={{ fontSize: 12, color: '#6c5ce7', fontWeight: 600 }}>Day {email.day}</div>
-                  <div style={{ fontWeight: 600, marginTop: 4 }}>Subject: {email.subject}</div>
-                  <div style={{ color: '#a0a0b8', fontSize: 13 }}>{email.previewText}</div>
-                  <div style={{ marginTop: 8, fontSize: 14 }}>{email.bodyOutline}</div>
-                  <div style={{ marginTop: 8, color: '#6c5ce7', fontWeight: 500 }}>CTA: {email.cta}</div>
+            {/* Loading state for auto campaign */}
+            {showQuickActions && autoCampaignLoading && !autoCampaign && (
+              <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 16, padding: 24, marginBottom: 16, textAlign: 'center', animation: 'dashFadeIn 0.4s ease-out' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, color: 'rgba(255,255,255,0.4)', fontSize: 14 }}>
+                  <div style={{ width: 16, height: 16, border: '2px solid rgba(108,92,231,0.3)', borderTop: '2px solid #6c5ce7', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+                  Generating campaign suggestion...
                 </div>
-              ))}
-            </div>
-            <div style={{ display: 'flex', gap: 24, marginTop: 16, padding: 12, background: 'rgba(108,92,231,0.15)', borderRadius: 8, fontSize: 14 }}>
-              <span>Open Rate: {campaign.estimatedOpenRate}</span>
-              <span>Click Rate: {campaign.estimatedClickRate}</span>
-              <span>ROI: {campaign.projectedROI}</span>
-            </div>
-          </div>
-        )}
+              </div>
+            )}
 
-        {/* Quick Actions */}
-        {chatMessages.length === 0 && !campaign && (
-          <div style={{ marginTop: 24 }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <button style={{ ...styles.quickActionButton, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
-                onClick={() => handleQuickAction("What's my next campaign?")}>
-                <span><span style={styles.quickActionIcon}>⚡</span> What's my next campaign?</span>
-                <span style={{ color: '#6c5ce7' }}>→</span>
-              </button>
-              <button style={{ ...styles.quickActionButton, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
-                onClick={async () => {
-                  setIsLoadingChat(true);
-                  try {
-                    const res = await fetch('/api/generate-campaign', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ brandData, products: [] })
-                    });
-                    const data = await res.json();
-                    setCampaign(data);
-                  } catch (err) { console.error(err); }
-                  setIsLoadingChat(false);
-                }}>
-                <span><span style={styles.quickActionIcon}>✉️</span> Draft an email sequence</span>
-                <span style={{ color: '#6c5ce7' }}>→</span>
-              </button>
-              <button style={{ ...styles.quickActionButton, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
-                onClick={() => handleQuickAction('Analyze my competitors')}>
-                <span><span style={styles.quickActionIcon}>🎯</span> Analyze my competitors</span>
-                <span style={{ color: '#6c5ce7' }}>→</span>
-              </button>
-            </div>
-          </div>
-        )}
+            {/* Quick Actions */}
+            {showQuickActions && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {[
+                  { text: 'What should my next campaign be?', icon: (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6c5ce7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>) },
+                  { text: 'Draft an email sequence for my top product', icon: (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6c5ce7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>) },
+                  { text: 'Analyze my competitors', icon: (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6c5ce7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>) },
+                ].map((action, i) => (
+                  <button
+                    key={i}
+                    onClick={() => handleQuickAction(action.text)}
+                    style={{
+                      ...styles.dashQuickAction,
+                      animation: `dashSlideUp 0.4s ease-out ${0.1 * (i + 1)}s both`,
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.1)'; e.currentTarget.style.borderColor = 'rgba(108,92,231,0.3)'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.06)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'; }}
+                  >
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1 }}>
+                      <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 36, height: 36, borderRadius: 10, background: 'rgba(108,92,231,0.1)', flexShrink: 0 }}>{action.icon}</span>
+                      <span style={{ fontSize: 15, fontWeight: 500 }}>{action.text}</span>
+                    </span>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.3)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                  </button>
+                ))}
+              </div>
+            )}
 
-        {/* Brand Info Card */}
-        {brandData && (
-          <div style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, padding: 16, marginTop: 20, display: 'flex', alignItems: 'center', gap: 12 }}>
-            <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#22c55e', flexShrink: 0 }} />
-            <div style={{ flex: 1 }}>
-              <span style={{ fontWeight: 600, fontSize: 14 }}>{brandData.brandName || 'Your Brand'} connected</span>
-              <span style={{ color: '#8888a8', fontSize: 13, marginLeft: 8 }}>
-                {brandData.products?.length || 0} products · {brandData.industry || 'Unknown'}
-              </span>
-            </div>
           </div>
-        )}
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   // ============================================================================
   // RENDER LOGIC
@@ -1297,13 +1379,73 @@ const styles = {
   },
 
   sidebar: {
-    width: '280px',
-    backgroundColor: '#1a1a2e',
-    borderRight: '1px solid rgba(108, 92, 231, 0.1)',
+    width: '240px',
+    backgroundColor: '#0f0f1a',
+    borderRight: '1px solid rgba(255,255,255,0.06)',
     display: 'flex',
     flexDirection: 'column',
-    padding: '24px',
+    padding: '24px 16px',
     boxSizing: 'border-box',
+    flexShrink: 0,
+  },
+
+  dashboardMain: {
+    flex: 1,
+    background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #1a1a2e 100%)',
+    overflowY: 'auto',
+    display: 'flex',
+    justifyContent: 'center',
+    padding: '80px 24px 40px',
+  },
+
+  dashboardCenter: {
+    width: '100%',
+    maxWidth: 640,
+  },
+
+  dashInput: {
+    width: '100%',
+    padding: '16px 52px 16px 20px',
+    fontSize: 16,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    border: '1px solid rgba(255,255,255,0.1)',
+    borderRadius: 16,
+    color: '#ffffff',
+    boxSizing: 'border-box',
+    outline: 'none',
+    transition: 'border-color 0.2s, background-color 0.2s',
+    fontFamily: 'inherit',
+  },
+
+  dashSendBtn: {
+    position: 'absolute',
+    right: 8,
+    top: '50%',
+    transform: 'translateY(-50%)',
+    width: 36,
+    height: 36,
+    borderRadius: '50%',
+    backgroundColor: '#6c5ce7',
+    border: 'none',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    transition: 'opacity 0.2s',
+  },
+
+  dashQuickAction: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: '14px 16px',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    border: '1px solid rgba(255,255,255,0.08)',
+    borderRadius: 12,
+    color: '#ffffff',
+    cursor: 'pointer',
+    transition: 'background-color 0.2s, border-color 0.2s',
+    textAlign: 'left',
+    fontFamily: 'inherit',
   },
 
   sidebarBrand: {
@@ -1327,18 +1469,19 @@ const styles = {
   navItem: {
     display: 'flex',
     alignItems: 'center',
-    gap: '12px',
-    padding: '12px 16px',
-    marginBottom: '8px',
-    borderRadius: '8px',
+    gap: '10px',
+    padding: '10px 14px',
+    marginBottom: '4px',
+    borderRadius: '10px',
     cursor: 'pointer',
-    transition: 'all 0.3s ease',
+    transition: 'background-color 0.2s',
     color: '#8b9dc3',
-    fontSize: '16px',
+    fontSize: '14px',
+    fontWeight: 500,
   },
 
   navIcon: {
-    fontSize: '20px',
+    fontSize: '18px',
   },
 
   sidebarFooter: {
