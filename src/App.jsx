@@ -18,6 +18,7 @@ const App = () => {
   const [campaign, setCampaign] = useState(null);
   const [autoCampaign, setAutoCampaign] = useState(null);
   const [autoCampaignLoading, setAutoCampaignLoading] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
   const chatEndRef = useRef(null);
 
   // Initialize Google Sign-In
@@ -52,6 +53,13 @@ const App = () => {
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages]);
+
+  // Landing page scroll detection
+  useEffect(() => {
+    const handleScroll = () => setScrolled(window.scrollY > 10);
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
   // Mock Claude API call for brand analysis
   const mockBrandExtraction = useCallback((url) => {
@@ -271,63 +279,398 @@ const App = () => {
   // SCREEN RENDERERS
   // ============================================================================
 
-  const renderLanding = () => (
-    <div style={styles.landingContainer}>
-      {/* Background orbs */}
-      <div style={styles.orb1}></div>
-      <div style={styles.orb2}></div>
-      <div style={styles.orb3}></div>
+  const renderLanding = () => {
+    const Check = () => (
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+        <circle cx="10" cy="10" r="10" fill="#10b981" fillOpacity="0.12" />
+        <path d="M6 10.5l2.5 2.5L14 7.5" stroke="#10b981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    );
 
-      {/* Content */}
-      <div style={styles.landingContent}>
-        <div style={styles.logoSection}>
-          <h1 style={styles.logo}>Lucy</h1>
-          <p style={styles.tagline}>Your AI Marketing Assistant</p>
-        </div>
+    const SlackIcon = () => (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+        <path d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52v2.52zm1.271 0a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522v-6.313zM8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52H8.834zm0 1.271a2.528 2.528 0 0 1 2.521 2.521 2.528 2.528 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521h6.312zM18.956 8.834a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522V8.834zm-1.27 0a2.528 2.528 0 0 1-2.523 2.521 2.527 2.527 0 0 1-2.52-2.521V2.522A2.527 2.527 0 0 1 15.163 0a2.528 2.528 0 0 1 2.523 2.522v6.312zM15.163 18.956a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.163 24a2.527 2.527 0 0 1-2.52-2.522v-2.522h2.52zm0-1.27a2.527 2.527 0 0 1-2.52-2.523 2.527 2.527 0 0 1 2.52-2.52h6.315A2.528 2.528 0 0 1 24 15.163a2.528 2.528 0 0 1-2.522 2.523h-6.315z" fill="#e01e5a"/>
+      </svg>
+    );
 
-        <div style={styles.heroSection}>
-          <h2 style={styles.heroTitle}>Marketing Excellence, Powered by AI</h2>
-          <p style={styles.heroDescription}>
-            Lucy analyzes your brand, builds campaigns, and delivers AI-powered insights
-            to help you grow faster.
-          </p>
+    const toolBadge = (name, logoUrl) => (
+      <div key={name} style={{
+        display: "inline-flex", alignItems: "center", gap: 10,
+        background: "#fff", border: "1px solid #e8e8ed", borderRadius: 10,
+        padding: "10px 18px",
+      }}>
+        <img src={logoUrl} alt={name} style={{ width: 20, height: 20, objectFit: "contain" }} />
+        <span style={{ fontSize: 14, fontWeight: 600, color: "#1d1d1f" }}>{name}</span>
+      </div>
+    );
 
-          <div style={styles.valuePropGrid}>
-            <div style={styles.valueProp}>
-              <div style={styles.valuePropIcon}>📊</div>
-              <h3>Analyze Your Brand</h3>
-              <p>Deep insights into your brand identity and market position</p>
-            </div>
-            <div style={styles.valueProp}>
-              <div style={styles.valuePropIcon}>✉️</div>
-              <h3>Build Campaigns</h3>
-              <p>Create targeted campaigns that drive results</p>
-            </div>
-            <div style={styles.valueProp}>
-              <div style={styles.valuePropIcon}>🤖</div>
-              <h3>AI-Powered Insights</h3>
-              <p>Get actionable recommendations from advanced AI</p>
+    return (
+      <div style={{ fontFamily: "'Inter', system-ui, -apple-system, sans-serif", color: "#1d1d1f", background: "#fff", WebkitFontSmoothing: "antialiased" }}>
+
+        {/* Nav */}
+        <nav style={{
+          position: "fixed", top: 0, left: 0, right: 0, zIndex: 100,
+          background: scrolled ? "rgba(255,255,255,0.85)" : "transparent",
+          backdropFilter: scrolled ? "saturate(180%) blur(20px)" : "none",
+          WebkitBackdropFilter: scrolled ? "saturate(180%) blur(20px)" : "none",
+          borderBottom: scrolled ? "1px solid rgba(0,0,0,0.06)" : "1px solid transparent",
+          transition: "all 0.3s",
+        }}>
+          <div style={{ maxWidth: 1120, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", height: 56, padding: "0 24px" }}>
+            <span style={{ fontSize: 18, fontWeight: 700, letterSpacing: "-0.04em", color: "#1d1d1f" }}>lucy</span>
+            <div style={{ display: "flex", alignItems: "center", gap: 32 }}>
+              {["Product", "Pricing", "Docs"].map((t) => (
+                <a key={t} href="#" style={{ fontSize: 14, color: "#6e6e73", textDecoration: "none", fontWeight: 500 }}>{t}</a>
+              ))}
+              <button onClick={() => setScreen('login')} style={{
+                fontSize: 14, fontWeight: 600, color: "#fff", background: "#1d1d1f",
+                padding: "7px 18px", borderRadius: 8, border: "none", cursor: "pointer",
+              }}>Get started</button>
             </div>
           </div>
+        </nav>
 
-          <button
-            style={styles.ctaButton}
-            onClick={() => setScreen('login')}
-            onMouseEnter={(e) => {
-              e.target.style.backgroundColor = '#5a4ab3';
-              e.target.style.transform = 'translateY(-2px)';
-            }}
-            onMouseLeave={(e) => {
-              e.target.style.backgroundColor = '#6c5ce7';
-              e.target.style.transform = 'translateY(0)';
-            }}
-          >
-            Get Started Free
-          </button>
-        </div>
+        {/* Hero */}
+        <section style={{ maxWidth: 780, margin: "0 auto", padding: "140px 24px 48px", textAlign: "center" }}>
+          <p style={{ fontSize: 14, fontWeight: 600, color: "#10b981", marginBottom: 16, letterSpacing: "0.02em" }}>AI-POWERED MARKETING</p>
+          <h1 style={{ fontSize: 56, fontWeight: 700, lineHeight: 1.08, letterSpacing: "-0.035em", margin: "0 0 20px", color: "#1d1d1f" }}>
+            Your entire marketing team, in one AI.
+          </h1>
+          <p style={{ fontSize: 18, lineHeight: 1.65, color: "#6e6e73", margin: "0 auto 36px", maxWidth: 520 }}>
+            Lucy connects to your tools, learns your brand, and runs campaigns — all on autopilot.
+          </p>
+          <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
+            <button onClick={() => setScreen('login')} style={{
+              fontSize: 15, fontWeight: 600, color: "#fff", background: "#1d1d1f",
+              padding: "12px 28px", borderRadius: 10, border: "none", cursor: "pointer",
+            }}>Start for free</button>
+            <button style={{
+              fontSize: 15, fontWeight: 600, color: "#1d1d1f", background: "transparent",
+              padding: "12px 28px", borderRadius: 10, border: "1px solid #d2d2d7", cursor: "pointer",
+            }}>See how it works</button>
+          </div>
+          <p style={{ fontSize: 13, color: "#afafb2", marginTop: 14 }}>Free plan available. No credit card needed.</p>
+        </section>
+
+        {/* Connects to your tools */}
+        <section style={{ padding: "32px 24px 64px" }}>
+          <div style={{ maxWidth: 1120, margin: "0 auto", textAlign: "center" }}>
+            <p style={{ fontSize: 14, color: "#afafb2", fontWeight: 500, marginBottom: 20 }}>Connects to your tools</p>
+            <div style={{ display: "flex", justifyContent: "center", gap: 12, flexWrap: "wrap" }}>
+              {toolBadge("Slack", "https://cdn.simpleicons.org/slack")}
+              {toolBadge("Google Meet", "https://cdn.simpleicons.org/googlemeet")}
+              {toolBadge("Shopify", "https://cdn.simpleicons.org/shopify")}
+              {toolBadge("Figma", "https://cdn.simpleicons.org/figma")}
+              {toolBadge("Google Docs", "https://cdn.simpleicons.org/googledocs")}
+              {toolBadge("Klaviyo", "https://cdn.simpleicons.org/klaviyo")}
+              {toolBadge("Notion", "https://cdn.simpleicons.org/notion")}
+            </div>
+          </div>
+        </section>
+
+        {/* Lucy lives in your tools */}
+        <section style={{ background: "#fafafa", padding: "100px 24px" }}>
+          <div style={{ maxWidth: 1120, margin: "0 auto" }}>
+            <div style={{ textAlign: "center", marginBottom: 64 }}>
+              <p style={{ fontSize: 14, fontWeight: 600, color: "#10b981", marginBottom: 8, letterSpacing: "0.02em" }}>LUCY LIVES IN YOUR TOOLS</p>
+              <h2 style={{ fontSize: 38, fontWeight: 700, letterSpacing: "-0.03em", margin: "0 0 12px" }}>From conversation to campaign in seconds</h2>
+              <p style={{ fontSize: 16, color: "#6e6e73", maxWidth: 500, margin: "0 auto" }}>Lucy watches your Slack, reads your docs, and pushes campaigns directly into Klaviyo — no tab switching.</p>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 40px 1fr", gap: 0, alignItems: "start" }}>
+
+              {/* Slack conversation */}
+              <div style={{
+                background: "#fff", borderRadius: 14, overflow: "hidden",
+                boxShadow: "0 1px 3px rgba(0,0,0,0.04), 0 8px 32px rgba(0,0,0,0.06)",
+                border: "1px solid rgba(0,0,0,0.06)",
+              }}>
+                <div style={{ padding: "14px 20px", borderBottom: "1px solid #f0f0f0", display: "flex", alignItems: "center", gap: 10 }}>
+                  <SlackIcon />
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: "#1d1d1f" }}># marketing</div>
+                    <div style={{ fontSize: 11, color: "#afafb2" }}>3 members</div>
+                  </div>
+                </div>
+
+                <div style={{ padding: "20px" }}>
+                  <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
+                    <div style={{ width: 32, height: 32, borderRadius: 6, background: "#e8e8ed", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700 }}>S</div>
+                    <div>
+                      <div style={{ marginBottom: 4 }}>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: "#1d1d1f" }}>Sarah</span>
+                        <span style={{ fontSize: 11, color: "#afafb2", marginLeft: 8 }}>10:42 AM</span>
+                      </div>
+                      <div style={{ fontSize: 14, color: "#1d1d1f", lineHeight: 1.55 }}>
+                        Hey team, we just launched the new summer collection on Shopify. We need an email campaign ASAP — can we get something out this week?
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
+                    <div style={{ width: 32, height: 32, borderRadius: 6, background: "#e8e8ed", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700 }}>M</div>
+                    <div>
+                      <div style={{ marginBottom: 4 }}>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: "#1d1d1f" }}>Mike</span>
+                        <span style={{ fontSize: 11, color: "#afafb2", marginLeft: 8 }}>10:44 AM</span>
+                      </div>
+                      <div style={{ fontSize: 14, color: "#1d1d1f", lineHeight: 1.55 }}>
+                        @Lucy can you handle this? Pull the new products and draft something.
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ display: "flex", gap: 10 }}>
+                    <div style={{ width: 32, height: 32, borderRadius: 6, background: "#1d1d1f", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: "#fff" }}>L</div>
+                    <div>
+                      <div style={{ marginBottom: 4 }}>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: "#1d1d1f" }}>Lucy</span>
+                        <span style={{ fontSize: 10, fontWeight: 600, color: "#10b981", background: "#ecfdf5", padding: "1px 6px", borderRadius: 4, marginLeft: 6 }}>AI</span>
+                        <span style={{ fontSize: 11, color: "#afafb2", marginLeft: 8 }}>10:44 AM</span>
+                      </div>
+                      <div style={{ fontSize: 14, color: "#1d1d1f", lineHeight: 1.6 }}>
+                        On it. I pulled 12 new products from your Shopify store. Here's what I'm proposing:
+                      </div>
+                      <div style={{
+                        marginTop: 10, background: "#f8f8fa", borderRadius: 10, padding: 16,
+                        border: "1px solid #e8e8ed", fontSize: 13, lineHeight: 1.6, color: "#1d1d1f",
+                      }}>
+                        <div style={{ fontWeight: 700, marginBottom: 8 }}>Summer Collection Launch</div>
+                        <div style={{ color: "#6e6e73" }}>3-email sequence over 7 days</div>
+                        <div style={{ color: "#6e6e73", marginTop: 4 }}>Email 1: "Summer just dropped" — hero product showcase</div>
+                        <div style={{ color: "#6e6e73" }}>Email 2: Social proof + bestsellers</div>
+                        <div style={{ color: "#6e6e73" }}>Email 3: Last chance + 10% off</div>
+                        <div style={{ marginTop: 10, display: "flex", gap: 8 }}>
+                          <span style={{ fontSize: 12, fontWeight: 600, color: "#1d1d1f", background: "#e8e8ed", padding: "4px 10px", borderRadius: 6 }}>Predicted open: 36%</span>
+                          <span style={{ fontSize: 12, fontWeight: 600, color: "#10b981", background: "#ecfdf5", padding: "4px 10px", borderRadius: 6 }}>Ready to push</span>
+                        </div>
+                      </div>
+                      <div style={{ marginTop: 10, fontSize: 14, color: "#1d1d1f" }}>
+                        Want me to push this directly to Klaviyo? I'll set up the flows and schedule it.
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Arrow connector */}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", paddingTop: 120 }}>
+                <svg width="40" height="20" viewBox="0 0 40 20" fill="none">
+                  <path d="M0 10h32m0 0l-6-6m6 6l-6 6" stroke="#d2d2d7" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </div>
+
+              {/* Klaviyo result */}
+              <div style={{
+                background: "#fff", borderRadius: 14, overflow: "hidden",
+                boxShadow: "0 1px 3px rgba(0,0,0,0.04), 0 8px 32px rgba(0,0,0,0.06)",
+                border: "1px solid rgba(0,0,0,0.06)",
+              }}>
+                <div style={{ padding: "14px 20px", borderBottom: "1px solid #f0f0f0", display: "flex", alignItems: "center", gap: 10 }}>
+                  <div style={{ width: 22, height: 22, borderRadius: 4, background: "#000", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <span style={{ color: "#fff", fontSize: 11, fontWeight: 800 }}>K</span>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: "#1d1d1f" }}>Klaviyo</div>
+                    <div style={{ fontSize: 11, color: "#afafb2" }}>Campaign created by Lucy</div>
+                  </div>
+                </div>
+
+                <div style={{ padding: "20px" }}>
+                  <div style={{ marginBottom: 20 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                      <div style={{ fontSize: 16, fontWeight: 700, color: "#1d1d1f" }}>Summer Collection Launch</div>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: "#f59e0b", background: "#fffbeb", padding: "3px 8px", borderRadius: 5 }}>Scheduled</span>
+                    </div>
+                    <div style={{ display: "flex", gap: 20, marginBottom: 20 }}>
+                      <div>
+                        <div style={{ fontSize: 11, color: "#afafb2", marginBottom: 2 }}>Recipients</div>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: "#1d1d1f" }}>8,432</div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 11, color: "#afafb2", marginBottom: 2 }}>Emails</div>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: "#1d1d1f" }}>3</div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 11, color: "#afafb2", marginBottom: 2 }}>Duration</div>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: "#1d1d1f" }}>7 days</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+                    {[
+                      { day: "Day 1", subject: "Summer just dropped — see what's new", status: "Scheduled", statusColor: "#f59e0b", statusBg: "#fffbeb" },
+                      { day: "Day 3", subject: "People are loving these pieces", status: "Draft ready", statusColor: "#6e6e73", statusBg: "#f0f0f0" },
+                      { day: "Day 7", subject: "Last chance: 10% off summer styles", status: "Draft ready", statusColor: "#6e6e73", statusBg: "#f0f0f0" },
+                    ].map((email, i) => (
+                      <div key={i}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 0" }}>
+                          <div style={{
+                            width: 8, height: 8, borderRadius: "50%", background: i === 0 ? "#10b981" : "#d2d2d7",
+                            flexShrink: 0,
+                          }} />
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontSize: 11, color: "#afafb2", marginBottom: 2 }}>{email.day}</div>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: "#1d1d1f" }}>{email.subject}</div>
+                          </div>
+                          <span style={{ fontSize: 11, fontWeight: 600, color: email.statusColor, background: email.statusBg, padding: "3px 8px", borderRadius: 5 }}>
+                            {email.status}
+                          </span>
+                        </div>
+                        {i < 2 && <div style={{ width: 1, height: 12, background: "#e8e8ed", marginLeft: 3.5 }} />}
+                      </div>
+                    ))}
+                  </div>
+
+                  <div style={{ display: "flex", gap: 8, marginTop: 20 }}>
+                    <div style={{
+                      flex: 1, textAlign: "center", padding: "10px 0", borderRadius: 8,
+                      background: "#1d1d1f", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer",
+                    }}>Launch campaign</div>
+                    <div style={{
+                      flex: 1, textAlign: "center", padding: "10px 0", borderRadius: 8,
+                      border: "1px solid #e8e8ed", color: "#1d1d1f", fontSize: 13, fontWeight: 600, cursor: "pointer",
+                    }}>Edit in Klaviyo</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Value Props */}
+        <section style={{ maxWidth: 1120, margin: "0 auto", padding: "100px 24px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 80, alignItems: "center" }}>
+          <div>
+            <h2 style={{ fontSize: 36, fontWeight: 700, lineHeight: 1.15, letterSpacing: "-0.03em", margin: "0 0 20px" }}>
+              Tap into deeper customer insights with Marketing Analytics
+            </h2>
+            <p style={{ fontSize: 16, lineHeight: 1.7, color: "#6e6e73", margin: "0 0 32px" }}>
+              Drive retention, revenue, and relationships at scale with actionable customer insights.
+            </p>
+            <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+              {[
+                { title: "Track every touchpoint", desc: "Understand the entire customer journey to convert more across channels, segments, and seasons." },
+                { title: "Start and scale faster", desc: "Skip the analysis with continuously updated, out-of-the-box machine learning models and dashboards." },
+                { title: "Take action in one click", desc: "Grow revenue on auto-pilot with ready-to-use templates, automated workflows, and personalized predictions." },
+                { title: "Built for marketers", desc: "Consolidate and customize your reporting, metrics, and attribution to track what matters." },
+              ].map((item) => (
+                <div key={item.title} style={{ display: "flex", gap: 14 }}>
+                  <div style={{ flexShrink: 0, marginTop: 2 }}><Check /></div>
+                  <div>
+                    <div style={{ fontSize: 15, fontWeight: 600, color: "#1d1d1f", marginBottom: 4 }}>{item.title}</div>
+                    <div style={{ fontSize: 14, color: "#6e6e73", lineHeight: 1.6 }}>{item.desc}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <div style={{
+              background: "#fff", borderRadius: 14, padding: 24,
+              boxShadow: "0 1px 2px rgba(0,0,0,0.03), 0 4px 20px rgba(0,0,0,0.06)",
+              border: "1px solid rgba(0,0,0,0.04)",
+            }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "#afafb2", marginBottom: 16 }}>Engagement Over Time</div>
+              <svg viewBox="0 0 300 80" style={{ width: "100%", height: 80 }}>
+                <polyline fill="none" stroke="#1d1d1f" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                  points="0,60 30,45 60,55 90,30 120,35 150,20 180,25 210,15 240,22 270,10 300,18" />
+                <polyline fill="none" stroke="#d2d2d7" strokeWidth="1.5" strokeDasharray="4,4"
+                  points="0,65 30,60 60,62 90,55 120,50 150,48 180,45 210,42 240,38 270,35 300,30" />
+              </svg>
+              <div style={{ display: "flex", gap: 16, marginTop: 12 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "#6e6e73" }}>
+                  <div style={{ width: 12, height: 2, background: "#1d1d1f", borderRadius: 1 }} /> Open rate
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "#6e6e73" }}>
+                  <div style={{ width: 12, height: 2, background: "#d2d2d7", borderRadius: 1 }} /> Industry avg
+                </div>
+              </div>
+            </div>
+            <div style={{
+              background: "#fff", borderRadius: 14, padding: 24,
+              boxShadow: "0 1px 2px rgba(0,0,0,0.03), 0 4px 20px rgba(0,0,0,0.06)",
+              border: "1px solid rgba(0,0,0,0.04)",
+            }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "#afafb2", marginBottom: 16 }}>Revenue by Channel</div>
+              <div style={{ display: "flex", alignItems: "flex-end", gap: 10, height: 80 }}>
+                {[90, 70, 85, 60, 95, 75].map((h, i) => (
+                  <div key={i} style={{ flex: 1, height: `${h}%`, borderRadius: 4, display: "flex", flexDirection: "column" }}>
+                    <div style={{ flex: 3, background: "#f59e0b", borderRadius: "4px 4px 0 0" }} />
+                    <div style={{ flex: 4, background: "#10b981" }} />
+                    <div style={{ flex: 5, background: "#1d1d1f", borderRadius: "0 0 4px 4px" }} />
+                  </div>
+                ))}
+              </div>
+              <div style={{ display: "flex", gap: 16, marginTop: 12 }}>
+                {[{ c: "#1d1d1f", l: "Email" }, { c: "#10b981", l: "Social" }, { c: "#f59e0b", l: "Ads" }].map((x) => (
+                  <div key={x.l} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "#6e6e73" }}>
+                    <div style={{ width: 8, height: 8, borderRadius: 2, background: x.c }} /> {x.l}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* How it works */}
+        <section style={{ background: "#fafafa", padding: "100px 24px" }}>
+          <div style={{ maxWidth: 1120, margin: "0 auto" }}>
+            <p style={{ fontSize: 14, fontWeight: 600, color: "#10b981", marginBottom: 8, textAlign: "center", letterSpacing: "0.02em" }}>HOW IT WORKS</p>
+            <h2 style={{ fontSize: 36, fontWeight: 700, letterSpacing: "-0.03em", textAlign: "center", margin: "0 0 56px" }}>Up and running in minutes</h2>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 24 }}>
+              {[
+                { num: "1", title: "Connect your tools", desc: "Link Slack, Shopify, Klaviyo, Google Calendar, and Figma. Lucy syncs your products, conversations, and brand assets." },
+                { num: "2", title: "Lucy learns your brand", desc: "She reads your docs, scans your store, and builds a brand profile — voice, colors, audience, positioning." },
+                { num: "3", title: "Campaigns on autopilot", desc: "Lucy spots opportunities in Slack, drafts campaigns, and pushes them to Klaviyo. You just approve." },
+              ].map((step) => (
+                <div key={step.num} style={{
+                  background: "#fff", borderRadius: 14, padding: 32,
+                  border: "1px solid rgba(0,0,0,0.04)",
+                }}>
+                  <div style={{
+                    width: 32, height: 32, borderRadius: 8, background: "#1d1d1f",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: 14, fontWeight: 700, color: "#fff", marginBottom: 20,
+                  }}>{step.num}</div>
+                  <h3 style={{ fontSize: 18, fontWeight: 700, margin: "0 0 8px", letterSpacing: "-0.02em" }}>{step.title}</h3>
+                  <p style={{ fontSize: 14, color: "#6e6e73", lineHeight: 1.65, margin: 0 }}>{step.desc}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* CTA */}
+        <section style={{ padding: "100px 24px", textAlign: "center" }}>
+          <div style={{ maxWidth: 560, margin: "0 auto" }}>
+            <h2 style={{ fontSize: 40, fontWeight: 700, letterSpacing: "-0.03em", margin: "0 0 16px" }}>Ready to automate your marketing?</h2>
+            <p style={{ fontSize: 16, color: "#6e6e73", lineHeight: 1.65, margin: "0 0 32px" }}>
+              Join thousands of brands using Lucy to create better campaigns in less time.
+            </p>
+            <button onClick={() => setScreen('login')} style={{
+              display: "inline-block", fontSize: 15, fontWeight: 600, color: "#fff",
+              background: "#1d1d1f", padding: "13px 32px", borderRadius: 10, border: "none", cursor: "pointer",
+            }}>Get started for free</button>
+            <p style={{ fontSize: 13, color: "#afafb2", marginTop: 14 }}>No credit card required</p>
+          </div>
+        </section>
+
+        {/* Footer */}
+        <footer style={{ borderTop: "1px solid #f0f0f0", padding: "32px 24px" }}>
+          <div style={{ maxWidth: 1120, margin: "0 auto", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ fontSize: 15, fontWeight: 700, letterSpacing: "-0.04em", color: "#1d1d1f" }}>lucy</span>
+            <div style={{ display: "flex", gap: 28 }}>
+              {["Privacy", "Terms", "Docs", "Support"].map((t) => (
+                <a key={t} href="#" style={{ fontSize: 13, color: "#afafb2", textDecoration: "none" }}>{t}</a>
+              ))}
+            </div>
+            <span style={{ fontSize: 13, color: "#d2d2d7" }}>&copy; 2026 Lucy AI</span>
+          </div>
+        </footer>
       </div>
-    </div>
-  );
+    );
+  };
 
   const renderLogin = () => (
     <div style={styles.loginContainer}>
@@ -860,7 +1203,6 @@ const styles = {
     backgroundColor: '#0f0f1a',
     color: '#ffffff',
     fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-    overflow: 'hidden',
   },
 
   // ========== LANDING PAGE ==========
