@@ -56,9 +56,9 @@ const App = () => {
 
   // Landing page scroll detection
   useEffect(() => {
-    const handleScroll = () => setScrolled(window.scrollY > 10);
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
+    const onScroll = () => setScrolled(window.scrollY > 20);
+    window.addEventListener('scroll', onScroll);
+    return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
   // Mock Claude API call for brand analysis
@@ -322,7 +322,7 @@ const App = () => {
               {["Product", "Pricing", "Docs"].map((t) => (
                 <a key={t} href="#" style={{ fontSize: 14, color: "#6e6e73", textDecoration: "none", fontWeight: 500 }}>{t}</a>
               ))}
-              <button onClick={() => setScreen('login')} style={{
+              <button onClick={() => setScreen('website-input')} style={{
                 fontSize: 14, fontWeight: 600, color: "#fff", background: "#1d1d1f",
                 padding: "7px 18px", borderRadius: 8, border: "none", cursor: "pointer",
               }}>Get started</button>
@@ -340,7 +340,7 @@ const App = () => {
             Lucy connects to your tools, learns your brand, and runs campaigns — all on autopilot.
           </p>
           <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
-            <button onClick={() => setScreen('login')} style={{
+            <button onClick={() => setScreen('website-input')} style={{
               fontSize: 15, fontWeight: 600, color: "#fff", background: "#1d1d1f",
               padding: "12px 28px", borderRadius: 10, border: "none", cursor: "pointer",
             }}>Start for free</button>
@@ -648,7 +648,7 @@ const App = () => {
             <p style={{ fontSize: 16, color: "#6e6e73", lineHeight: 1.65, margin: "0 0 32px" }}>
               Join thousands of brands using Lucy to create better campaigns in less time.
             </p>
-            <button onClick={() => setScreen('login')} style={{
+            <button onClick={() => setScreen('website-input')} style={{
               display: "inline-block", fontSize: 15, fontWeight: 600, color: "#fff",
               background: "#1d1d1f", padding: "13px 32px", borderRadius: 10, border: "none", cursor: "pointer",
             }}>Get started for free</button>
